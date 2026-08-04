@@ -169,7 +169,7 @@ export default function SidePanel({ zoom }) {
           <div className="o">
             <div className="t">Set pace</div>
             <div className="field" style={{ margin: 0 }}>
-              <input type="number" step="0.1" min="0.5" id="epwIn" defaultValue={epw} style={{ width: 52 }} onChange={e => core.setEpw(e.target.value)} /> <span className="mini">/wk</span>
+              <input type="number" step="0.1" min="0.5" id="epwIn" value={epw} style={{ width: 52 }} onChange={e => core.setEpw(e.target.value)} /> <span className="mini">/wk</span>
             </div>
             <div className="r" style={{ marginTop: 6 }}>{projEnd}</div><div className="mini">projected end</div>
           </div>
