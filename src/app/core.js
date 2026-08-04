@@ -378,7 +378,10 @@ export async function uiChoice(msg, okLabel, altLabel) {
 export const gradeOf = (s, id) => (marks[s] && marks[s][id] && marks[s][id].g) || 0;
 export const failOf = (s, id) => (marks[s] && marks[s][id] && marks[s][id].f) || 0;
 export const isDone = (s, id) => DONE.has(gradeOf(s, id));
-export function escapeId(s) { return (s + '').replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+/* Escapes for both text and attribute contexts: the result is interpolated into
+   attribute values (e.g. data-id="…"), so quotes must be escaped too or a name
+   containing one breaks out and injects arbitrary attributes. */
+export function escapeId(s) { return (s + '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
 /* annulus sector path (deg, clockwise, y-down) */
 function sector(cx, cy, rO, rI, a0, a1) {
