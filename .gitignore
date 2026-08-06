@@ -2,3 +2,5 @@ node_modules/
 dist/
 *.local
 .DS_Store
+# one-off standalone builds handed to the user for review (regenerate as needed)
+OCU-Tracker-*.html
