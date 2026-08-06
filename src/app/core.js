@@ -454,8 +454,11 @@ function ballGroup(ev, available) {
   const num = (ev.num != null && ev.num !== '') ? `<circle cx="${size - 5}" cy="5" r="8.5" class="numbg"/><text class="numbadge" x="${size - 5}" y="8" text-anchor="middle">${escapeId(ev.num)}</text>` : '';
   const label = escapeId(ev.label || ev.id);
   let cap = '';
+  /* one invisible disc so the whole ball hit-tests as a single shape — without it the
+     gap between the wedge ring and the inner icon fires pointerleave/enter as you cross it */
+  const hit = `<circle cx="${cx}" cy="${cy}" r="${(rO + 1).toFixed(2)}" fill="none" pointer-events="all"/>`;
   return `<g class="ball" data-id="${escapeId(ev.id)}" transform="translate(${(x - cx).toFixed(1)},${(y - cy).toFixed(1)})">
-  ${hl}${segs}${innerShape(ev.type, cx, cy)}
+  ${hit}${hl}${segs}${innerShape(ev.type, cx, cy)}
   <text class="${dark}" x="${cx}" y="${cy + 3}" text-anchor="middle" style="font-size:${ballFontFor(ev.id)}px">${label}</text>${num}${cap}</g>`;
 }
 
