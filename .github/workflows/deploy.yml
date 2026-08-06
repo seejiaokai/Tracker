@@ -10,9 +10,13 @@ permissions:
   pages: write
   id-token: write
 
+# One deployment at a time. A newer queued run replaces an older queued one, but a run
+# that is already deploying is left alone: cancelling mid-flight orphans the Pages
+# deployment it registered, and the next run then sits in deployment_queued behind that
+# orphan until actions/deploy-pages gives up after 10 minutes.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
