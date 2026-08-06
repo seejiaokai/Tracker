@@ -159,6 +159,37 @@ ok('clicking a ball opens the grading popup', await pg.evaluate(() => {
 ok('no uncaught page errors', errs.length === 0, errs.slice(0, 2).join(' | '));
 ok('no unexpected failed requests', bad4xx.length === 0, [...new Set(bad4xx)].slice(0, 3).join(' | '));
 
+/* ---- syllabus data integrity (every syllabus) + 2026 chart spot-checks ---- */
+const { SYLLABI } = await import('../src/data/syllabi.js');
+const dangling = [], cyclic = [];
+for (const [name, syl] of Object.entries(SYLLABI)) {
+  const byid = Object.fromEntries(syl.map(e => [e.id, e]));
+  syl.forEach(e => (e.prereqs || []).forEach(p => { if (!byid[p]) dangling.push(`${name}:${e.id}<-${p}`); }));
+  const seen = {};
+  const walk = id => {
+    if (seen[id] === 2) return;
+    if (seen[id] === 1) { cyclic.push(`${name}:${id}`); return; }
+    seen[id] = 1; (byid[id]?.prereqs || []).forEach(walk); seen[id] = 2;
+  };
+  syl.forEach(e => walk(e.id));
+}
+ok('no prereq points at a missing event', dangling.length === 0, dangling.slice(0, 3).join(', '));
+ok('no circular prereqs', cyclic.length === 0, [...new Set(cyclic)].slice(0, 3).join(', '));
+
+/* A handful of 2026 links read straight off the Jul 26 course map. These were
+   misread by earlier extraction passes, so they are pinned here. */
+const CHART_2026 = {
+  'BFM-1': ['AAM-06', 'SA-6'], 'INT-1': ['AHC-1', 'INT(S)-4'], 'ACM-1': ['AAM-10', 'BFM-7'],
+  'LASDT-3': ['TI-1'], 'SAT-1': ['DCA-1', 'SAT(S)-2'], 'SAT(S)-1': ['DCA(S)-1', 'ST-15'],
+  'SA-2': ['SA(S)-3', 'SA-1'], 'SA-3': ['SA(S)-4', 'SA-2'], 'SA-4': ['SA(S)-5', 'SA-3'],
+  'TR(S)-7': ['TR(S)-LAO'], 'ST-18': ['SAT-2', 'SATN-1'], 'AGW-01': ['T-12'],
+};
+const by26 = Object.fromEntries(SYLLABI['2026'].map(e => [e.id, e]));
+const wrong = Object.entries(CHART_2026).filter(([id, want]) =>
+  JSON.stringify((by26[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+ok('2026 prereqs match the course map', wrong.length === 0,
+  wrong.map(([id]) => `${id}=[${(by26[id]?.prereqs || []).join(',')}]`).join(' | '));
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 await b.close();
 stopServer();
