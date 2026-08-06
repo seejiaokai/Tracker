@@ -60,8 +60,11 @@ egress policy — the proxy answers `403` to `CONNECT`, same as any non-allowlis
 host. Confirm with:
 
 ```
-curl -sS http://127.0.0.1:36909/__agentproxy/status | python3 -m json.tool
+curl -sS "$HTTPS_PROXY/__agentproxy/status" | python3 -m json.tool
 ```
+
+(Use `$HTTPS_PROXY` — the port changes between sessions, so a hardcoded one
+will just fail to connect and tell you nothing.)
 
 and look at `recentRelayFailures`. This is **not** fixable from inside the
 container and must not be routed around. Only the user can change it, by
