@@ -28,6 +28,10 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+        env:
+          # playwright is a devDependency for `npm run smoke`; this job never
+          # drives a browser, so skip its ~150 MB postinstall download.
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
       - run: npm run build
         env:
           GITHUB_PAGES: 'true'
