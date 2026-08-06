@@ -105,8 +105,9 @@ function InfoModalInner({ id }) {
   };
   return (
     <>
-      <div className="overlay" id="infoOverlay" style={{ zIndex: 70, display: 'block' }} onClick={core.closeInfo}></div>
-      <div className="modal" id="infoModal" style={{ zIndex: 71, width: 'min(440px,94vw)', display: 'block' }}>
+      {/* above #showAllPanel (81) so it can never open behind the Show All list */}
+      <div className="overlay" id="infoOverlay" style={{ zIndex: 90, display: 'block' }} onClick={core.closeInfo}></div>
+      <div className="modal" id="infoModal" style={{ zIndex: 91, width: 'min(440px,94vw)', display: 'block' }}>
         <h2 id="infoTitle">{id} — details</h2>
         <div className="field"><label>Name</label><input id="ifName" style={{ flex: 1 }} value={name} onChange={e => setName(e.target.value)} /></div>
         <div className="field"><label>Type / format</label><input id="ifFmt" style={{ flex: 1 }} placeholder="e.g. Lecture, OFT/AMT, 2 x F-15SG" value={fmtV} onChange={e => setFmtV(e.target.value)} /></div>

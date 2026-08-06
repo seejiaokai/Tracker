@@ -1746,18 +1746,25 @@ export function toggleDetails() {
 export let infoId = null;
 export function openInfo(id) { infoId = id; notify(); }
 export function closeInfo() { infoId = null; notify(); }
-export async function saveInfo(vals) {
-  if (!infoId) return;
-  const o = { name: vals.name.trim(), fmt: vals.fmt.trim(), hrs: vals.hrs.trim(), crew: vals.crew.trim(), pre: vals.pre.trim() };
-  const base = EVENT_INFO[infoId] || {}; const diff = {};
+/* the id-explicit forms — used by the inline editor in the Show All list */
+export async function saveInfoFor(id, vals) {
+  if (!id) return;
+  const t = v => (v == null ? '' : String(v)).trim();
+  const o = { name: t(vals.name), fmt: t(vals.fmt), hrs: t(vals.hrs), crew: t(vals.crew), pre: t(vals.pre) };
+  const base = EVENT_INFO[id] || {}; const diff = {};
   Object.keys(o).forEach(k => { if (o[k] !== (base[k] || '')) diff[k] = o[k]; });
-  if (Object.keys(diff).length) eventInfo[infoId] = diff; else delete eventInfo[infoId];
-  await saveEventInfo(); closeInfo(); renderBoard(); renderSide();
+  if (Object.keys(diff).length) eventInfo[id] = diff; else delete eventInfo[id];
+  await saveEventInfo(); renderBoard(); renderSide();
 }
-export async function resetInfo() {
-  if (!infoId) return;
-  delete eventInfo[infoId]; await saveEventInfo(); renderBoard(); notify();
+export async function resetInfoFor(id) {
+  if (!id) return;
+  delete eventInfo[id]; await saveEventInfo(); renderBoard(); notify();
 }
+export async function saveInfo(vals) {
+  const id = infoId; if (!id) return;
+  await saveInfoFor(id, vals); closeInfo();
+}
+export async function resetInfo() { await resetInfoFor(infoId); }
 /* ---------- Show All ---------- */
 export let showAllOpen = false;
 export function openShowAll() { showAllOpen = true; notify(); }

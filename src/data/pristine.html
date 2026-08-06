@@ -55,8 +55,18 @@ button.sm{padding:3px 7px;font-size:11px}
 .sarow .smeta{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.5}
 .sarow .smeta b{color:var(--ink);font-weight:600}
 .sarow .sedit{align-self:center}
+.sarow.editing{background:#151b26;border-bottom-color:var(--accent)}
+.saedit{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin:6px 6px 4px 0}
+.saedit label{display:flex;flex-direction:column;gap:3px;font-size:10px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
+.saedit .full{grid-column:1/-1}
+.saedit input,.saedit textarea{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:5px 7px;font-family:inherit;font-size:12.5px;line-height:1.45;text-transform:none;letter-spacing:normal}
+.saedit textarea{resize:vertical;min-height:34px}
+.saedit-btns{grid-column:1/-1;display:flex;gap:6px;justify-content:flex-end;margin-top:2px}
+.saedit-btns button:first-child{margin-right:auto}
+@media(max-width:560px){.saedit{grid-template-columns:1fr}}
 #infoModal .field label{min-width:96px}
-#infoModal textarea{width:100%;min-height:52px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:7px;font:inherit}
+/* five short fields — the generic 300px .modal textarea is for the raw-JSON editor */
+#infoModal textarea{width:100%;height:52px;min-height:34px;resize:vertical;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:7px;font:inherit}
 .board{overflow-x:auto;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:12px 16px;touch-action:none;scrollbar-color:#4a5464 transparent;scrollbar-width:auto}
 .board::-webkit-scrollbar{width:12px;height:12px}
 .board::-webkit-scrollbar-track{background:#12151b}
@@ -767,8 +777,8 @@ small.hint{color:var(--muted);font-size:11px}
     <button id="saClose">Close</button></div>
   <div id="saBody"></div>
 </div>
-<div class="overlay" id="infoOverlay" style="z-index:70"></div>
-<div class="modal" id="infoModal" style="z-index:71;width:min(440px,94vw)">
+<div class="overlay" id="infoOverlay" style="z-index:90"></div>
+<div class="modal" id="infoModal" style="z-index:91;width:min(440px,94vw)">
   <h2 id="infoTitle">Event details</h2>
   <div class="field"><label>Name</label><input id="ifName" style="flex:1"></div>
   <div class="field"><label>Type / format</label><input id="ifFmt" style="flex:1" placeholder="e.g. Lecture, OFT/AMT, 2 x F-15SG"></div>
@@ -1802,7 +1812,8 @@ async function uiChoice(msg,okLabel,altLabel){
 const gradeOf=(s,id)=>(marks[s]&&marks[s][id]&&marks[s][id].g)||0;
 const failOf=(s,id)=>(marks[s]&&marks[s][id]&&marks[s][id].f)||0;
 const isDone=(s,id)=>DONE.has(gradeOf(s,id));
-function escapeId(s){return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+/* output lands in HTML attributes (data-id="…", value="…"), so quotes must go too */
+function escapeId(s){return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
 /* annulus sector path (deg, clockwise, y-down) */
 function sector(cx,cy,rO,rI,a0,a1){
@@ -3084,12 +3095,44 @@ function renderShowAll(){const q=(document.getElementById('saSearch').value||'')
    if(d.fmt||d.hrs)meta.push('<b>Type:</b> '+escapeId(d.fmt||'\u2014')+(d.hrs?' \u00b7 '+escapeId(d.hrs):''));
    meta.push('<b>Crew:</b> '+(d.crew?escapeId(d.crew):'\u2014'));
    {const pv=preText(e.id);meta.push('<b>Prerequisites:</b> '+(pv?escapeId(pv):'\u2014'));}
-   html+='<div class="sarow"><span class="sdot" style="background:'+(TYPE_COLOR[e.type]||'#888')+'"></span>'+
+   const editing=saEditId===e.id;
+   html+='<div class="sarow'+(editing?' editing':'')+'"><span class="sdot" style="background:'+(TYPE_COLOR[e.type]||'#888')+'"></span>'+
     '<div><span class="sid">'+escapeId(e.id)+'</span> <span class="snm">'+escapeId(d.name||'')+'</span>'+
-    '<div class="smeta">'+meta.join('<br>')+'</div></div>'+
-    '<button class="sm sedit" data-info="'+escapeId(e.id)+'">Edit</button></div>';});});
+    (editing?saEditForm(e.id,d):'<div class="smeta">'+meta.join('<br>')+'</div>')+'</div>'+
+    (editing?'':'<button class="sm sedit" data-info="'+escapeId(e.id)+'">Edit</button>')+'</div>';});});
  document.getElementById('saBody').innerHTML=html||'<div class="mini">No matches.</div>';
- document.querySelectorAll('#saBody [data-info]').forEach(b=>b.onclick=()=>openInfo(b.dataset.info));}
+ document.querySelectorAll('#saBody [data-info]').forEach(b=>b.onclick=()=>{saEditId=b.dataset.info;renderShowAll();
+  const f=document.querySelector('.saedit input');if(f)f.focus();});
+ wireSaEdit();}
+/* compact in-place editor for one Show All row — same five fields as the pop-up editor,
+   so there is no need to open a modal on top of this panel */
+var saEditId=null;
+function saEditForm(id,d){
+ const pre=((byid[id]||{}).prereqs||[]).join(', ');
+ const ph=pre?'from the chart: '+pre:'e.g. AVI-02, AVI-03, AVI-04';
+ const f=(lab,el)=>'<label'+(lab==='Prerequisites'?' class="full"':'')+'>'+lab+el+'</label>';
+ return '<div class="saedit">'+
+  f('Name','<input data-se="name" value="'+escapeId(d.name||'')+'">')+
+  f('Type / format','<input data-se="fmt" placeholder="e.g. Lecture, OFT/AMT" value="'+escapeId(d.fmt||'')+'">')+
+  f('Hours','<input data-se="hrs" placeholder="e.g. 1.5 Hrs" value="'+escapeId(d.hrs||'')+'">')+
+  f('Crew','<textarea data-se="crew" rows="2" placeholder="e.g. UP/UW, IP/IW/FSI">'+escapeId(d.crew||'')+'</textarea>')+
+  f('Prerequisites','<textarea data-se="pre" rows="2" placeholder="'+escapeId(ph)+'">'+escapeId(d.pre||'')+'</textarea>')+
+  '<div class="saedit-btns"><button class="sm" data-sa="reset" title="Revert to the value from the source document">Reset to doc</button>'+
+  '<button class="sm" data-sa="cancel">Cancel</button><button class="sm primary" data-sa="save">Save</button></div></div>';}
+function wireSaEdit(){
+ const box=document.querySelector('#saBody .saedit');if(!box)return;
+ const id=saEditId;
+ const done=()=>{saEditId=null;renderShowAll();};
+ const save=async()=>{const g=k=>{const el=box.querySelector('[data-se="'+k+'"]');return el?el.value.trim():'';};
+  const o={name:g('name'),fmt:g('fmt'),hrs:g('hrs'),crew:g('crew'),pre:g('pre')};
+  const base=EVENT_INFO[id]||{};const diff={};Object.keys(o).forEach(k=>{if(o[k]!==(base[k]||''))diff[k]=o[k];});
+  if(Object.keys(diff).length)eventInfo[id]=diff;else delete eventInfo[id];
+  await saveEventInfo();renderBoard();renderSide();done();};
+ box.querySelector('[data-sa="save"]').onclick=save;
+ box.querySelector('[data-sa="cancel"]').onclick=done;
+ box.querySelector('[data-sa="reset"]').onclick=async()=>{delete eventInfo[id];await saveEventInfo();renderBoard();renderSide();renderShowAll();};
+ box.addEventListener('keydown',ev=>{if(ev.key==='Escape'){ev.stopPropagation();done();}
+  else if(ev.key==='Enter'&&(ev.ctrlKey||ev.metaKey)){ev.preventDefault();save();}});}
 function openShowAll(){document.getElementById('saOverlay').style.display='block';document.getElementById('showAllPanel').classList.add('on');renderShowAll();}
 function closeShowAll(){document.getElementById('saOverlay').style.display='none';document.getElementById('showAllPanel').classList.remove('on');}
 document.getElementById('showAllBtn').onclick=openShowAll;
