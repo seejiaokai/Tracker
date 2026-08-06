@@ -3,6 +3,26 @@
 Vite + React (JavaScript, not TypeScript). Deployed to GitHub Pages from `main`
 via `.github/workflows/deploy.yml`.
 
+## How to talk to this user
+
+**The user is not a programmer. Explain everything in plain language.** This
+applies to every reply, not just summaries, and it is a standing instruction —
+carry it across handoffs.
+
+- Lead with what changed for them: what they will see, click, or notice in the
+  app. Put the cause after that, if it is worth saying at all.
+- No jargon. If a technical word is genuinely unavoidable, say what it means in
+  half a sentence the first time. Avoid file paths, function names, CSS
+  properties, and code snippets in the explanation — they are noise to this
+  reader. Referring to a screen or button by the name shown in the app is fine.
+- Prefer a short everyday comparison over a precise technical description when
+  the two compete.
+- Keep it short. A few sentences and a plain heading beat a long report.
+- Say plainly when something is broken, uncertain, or was not checked. Plain
+  language means simpler words, **not** softened facts or hidden problems.
+- When a decision is theirs to make, state the choice in ordinary terms and say
+  what you recommend.
+
 ## Always do live testing
 
 **Verify UI changes by driving the real app in a browser, not by reading the diff.**
