@@ -176,11 +176,15 @@ for (const [name, syl] of Object.entries(SYLLABI)) {
 ok('no prereq points at a missing event', dangling.length === 0, dangling.slice(0, 3).join(', '));
 ok('no circular prereqs', cyclic.length === 0, [...new Set(cyclic)].slice(0, 3).join(', '));
 
-/* A handful of 2026 links read straight off the Jul 26 course map. These were
-   misread by earlier extraction passes, so they are pinned here. */
+/* 2026 links cross-checked against the Prerequisites row of the Jul 26 tables.
+   Two extraction passes have now misread these off the flow-chart images, so
+   they are pinned to the value the document states in words. */
 const CHART_2026 = {
-  'BFM-1': ['AAM-06', 'SA-6'], 'INT-1': ['AHC-1', 'INT(S)-4'], 'ACM-1': ['AAM-10', 'BFM-7'],
-  'LASDT-3': ['TI-1'], 'SAT-1': ['DCA-1', 'SAT(S)-2'], 'SAT(S)-1': ['DCA(S)-1', 'ST-15'],
+  'BFM-1': ['AAM-06', 'AHC-1', 'INT(S)-2'], 'INT-1': ['BFM-7', 'INT(S)-4'],
+  'ACM-1': ['AAM-10', 'LASDT-1'], 'LASDT-3': ['LASDT-2'],
+  'SAT-1': ['SA-6', 'SAT(S)-2'], 'SAT(S)-1': ['SA(S)-7', 'ST-15'],
+  'SA(S)-1': ['AGW-01', 'DCA(S)-1', 'ST-13'],
+  'SA-1': ['AGS-04', 'DCA-1', 'JMP-04', 'OPS-07', 'SA(S)-2', 'ST-17'],
   'SA-2': ['SA(S)-3', 'SA-1'], 'SA-3': ['SA(S)-4', 'SA-2'], 'SA-4': ['SA(S)-5', 'SA-3'],
   'TR(S)-7': ['TR(S)-LAO'], 'ST-18': ['SAT-2', 'SATN-1'], 'AGW-01': ['T-12'],
 };
@@ -189,6 +193,32 @@ const wrong = Object.entries(CHART_2026).filter(([id, want]) =>
   JSON.stringify((by26[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
 ok('2026 prereqs match the course map', wrong.length === 0,
   wrong.map(([id]) => `${id}=[${(by26[id]?.prereqs || []).join(',')}]`).join(' | '));
+
+/* The layouts carry x/y only, so a prereq edit silently drags an arrow across
+   the whole board — which is exactly how the last rebuild shipped looking like
+   spaghetti. Any link far longer than a normal one means the reading and the
+   hand-placed position disagree, and one of the two is wrong. */
+const { DEFAULT_LAYOUTS } = await import('../src/data/layouts.js');
+const SPAN_LIMIT = 1000;
+/* Baseline per syllabus, not zero: these long links predate any rebuild and are
+   in the user's own charts. Tx 2026 / Tx 2024 / A/G - A/A 2026 still carry the
+   LASDT->SA links that made 2026 look like spaghetti, so they are worth a look
+   too — but changing them is a separate, confirmed-with-the-user job. */
+const SPAN_BASELINE = { '2024': 0, '2026': 2, 'Tx 2026': 3, 'A/G - A/A 2026': 7, 'Tx 2024': 3 };
+const stretched = [];
+for (const [name, syl] of Object.entries(SYLLABI)) {
+  const L = DEFAULT_LAYOUTS[name]; if (!L) continue;
+  const long = [];
+  for (const e of syl) for (const p of e.prereqs || []) {
+    const a = L[p], b = L[e.id];
+    if (typeof a?.x !== 'number' || typeof b?.x !== 'number') continue;
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (d > SPAN_LIMIT) long.push(`${p}->${e.id} ${Math.round(d)}px`);
+  }
+  const allowed = SPAN_BASELINE[name] ?? 0;
+  if (long.length > allowed) stretched.push(`${name}: ${long.length}>${allowed} (${long.slice(0, 3).join(', ')})`);
+}
+ok(`no new arrows longer than ${SPAN_LIMIT}px`, stretched.length === 0, stretched.join(' | '));
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 await b.close();
