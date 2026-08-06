@@ -23,6 +23,11 @@ carry it across handoffs.
 - When a decision is theirs to make, state the choice in ordinary terms and say
   what you recommend.
 
+**Keep every markdown doc in this repo under 200 lines**, this file included.
+If one is outgrowing that, cut it rather than letting it sprawl: drop what the
+reader can see in the code, merge overlapping points, and prefer a table to
+paragraphs. Length is a standing constraint, not a target to fill.
+
 ## Always do live testing
 
 **Verify UI changes by driving the real app in a browser, not by reading the diff.**
