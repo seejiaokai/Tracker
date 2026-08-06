@@ -10,7 +10,8 @@ import { SYLLABI, SYL_NAMES, DEFAULT_SYL_NAME, DEFAULT_SYL_ORDER } from '../data
 import { DEFAULT_LAYOUTS } from '../data/layouts.js';
 import { EVENT_INFO } from '../data/eventInfo.js';
 import { SEED_STATE, SEED_STAMP } from '../data/seedState.js';
-import { storage, flushNow, loadLatest, cloudButtonClick, setCloudSinks, getCloudCache, cloudCfg } from '../sync/cloud.js';
+import { storage as cloudStorage, flushNow as cloudFlushNow, loadLatest as cloudLoadLatest, cloudButtonClick, setCloudSinks, getCloudCache, cloudCfg } from '../sync/cloud.js';
+import { MOCK_DB_ENABLED, mockStorage, mockFlushNow, mockLoadLatest } from '../sync/mock.js';
 import PRISTINE_HTML from '../data/pristine.html?raw';
 
 export { SYLLABI, SYL_NAMES, DEFAULT_SYL_NAME, DEFAULT_SYL_ORDER, DEFAULT_LAYOUTS, EVENT_INFO };
@@ -66,7 +67,15 @@ export const BUCKETS = [
   { key: 'test', label: 'Tests', types: ['test'] },
 ];
 
-/* ---------- storage ---------- */
+/* ---------- storage ----------
+   Which backend the app talks to is decided once, here. By default that is the
+   real SharePoint / cloud / localStorage stack; when the mock database is
+   enabled (see sync/mock.js) every read and write goes to an in-memory store
+   instead, so nothing is persisted or sent over the network. */
+const storage = MOCK_DB_ENABLED ? mockStorage : cloudStorage;
+const flushNow = MOCK_DB_ENABLED ? mockFlushNow : cloudFlushNow;
+const loadLatest = MOCK_DB_ENABLED ? mockLoadLatest : cloudLoadLatest;
+
 const mem = {};
 async function sGet(k) { try { const r = await storage.get(k); return r ? r.value : null; } catch (e) { return mem[k] ?? null; } }
 async function sSet(k, v) { mem[k] = v; setSaveStatus('', 'saving'); try { await storage.set(k, v); setSaveStatus('', 'ok'); } catch (e) { setSaveStatus('local only', 'ok'); } }
@@ -2201,7 +2210,9 @@ async function collectState() { // gather every stored key into one object (for 
       for (const k of keys) { try { const g = await storage.get(k); if (g) out[k] = g.value; } catch (e) {} }
     }
   } catch (e) {}
-  Object.assign(out, getCloudCache());
+  /* On the mock backend there is no cloud cache to fold in, and pulling one in
+     would leak real synced data into an otherwise self-contained export. */
+  if (!MOCK_DB_ENABLED) Object.assign(out, getCloudCache());
   Object.assign(out, mem);
   return out;
 }
