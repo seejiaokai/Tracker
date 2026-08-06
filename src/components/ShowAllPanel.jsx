@@ -50,6 +50,8 @@ export default function ShowAllPanel() {
   const blocks = [];
   phases.forEach(p => {
     const evs = seen[p].filter(e => {
+      /* never filter away the row being edited — it would bin what has been typed */
+      if (e.id === editId) return true;
       const d = core.infoFor(e.id);
       const hay = (e.id + ' ' + (d.name || '') + ' ' + (d.crew || '') + ' ' + (d.pre || '')).toLowerCase();
       return !query || hay.includes(query);

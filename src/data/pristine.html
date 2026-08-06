@@ -3089,7 +3089,8 @@ document.getElementById('ifReset').onclick=async()=>{if(infoId){delete eventInfo
 /* ---------- Show All ---------- */
 function renderShowAll(){const q=(document.getElementById('saSearch').value||'').toLowerCase();
  const phases=[];const seen={};SYL.forEach(e=>{const p=e.phase||'Other';if(!seen[p]){seen[p]=[];phases.push(p);}seen[p].push(e);});
- let html='';phases.forEach(p=>{const evs=seen[p].filter(e=>{const d=infoFor(e.id);const hay=(e.id+' '+(d.name||'')+' '+(d.crew||'')+' '+(d.pre||'')).toLowerCase();return !q||hay.includes(q);});
+ /* the row being edited always stays visible, or filtering would bin what was typed */
+ let html='';phases.forEach(p=>{const evs=seen[p].filter(e=>{if(e.id===saEditId)return true;const d=infoFor(e.id);const hay=(e.id+' '+(d.name||'')+' '+(d.crew||'')+' '+(d.pre||'')).toLowerCase();return !q||hay.includes(q);});
   if(!evs.length)return;html+='<div class="saphase">'+escapeId(p)+'</div>';
   evs.forEach(e=>{const d=infoFor(e.id);const meta=[];
    if(d.fmt||d.hrs)meta.push('<b>Type:</b> '+escapeId(d.fmt||'\u2014')+(d.hrs?' \u00b7 '+escapeId(d.hrs):''));
