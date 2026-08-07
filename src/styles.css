@@ -43,9 +43,6 @@ button.sm{padding:3px 7px;font-size:11px}
  body.tab-info .board{display:none}
  body.tab-flow .side{display:none}
  body.tab-info .legend{display:none}
- /* Room to scroll the last event clear of the bottom edge and the zoom control,
-    which otherwise sits on top of it. */
- .board{padding-bottom:170px}
 }
 #showAllPanel{position:fixed;z-index:81;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,94vw);max-height:88vh;display:none;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.6)}
 #showAllPanel.on{display:flex}
@@ -100,6 +97,10 @@ button.sm{padding:3px 7px;font-size:11px}
 @media(max-width:1050px){
  body.tab-flow #sideZoomCtl{display:none}
  .zoomwho{display:none}
+ /* Room to scroll the last event clear of the bottom edge and the zoom control,
+    which otherwise sits on top of it. Must come after the .board shorthand
+    further up the file, or padding:12px 16px silently wins. */
+ .board{padding-bottom:170px}
  #sideZoomCtl,#flowZoomCtl{padding:3px 5px;gap:3px}
 }
 #flowZoomCtl{position:fixed;z-index:60;left:14px;bottom:14px;display:flex;gap:4px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:4px 6px;box-shadow:0 4px 14px rgba(0,0,0,.45)}

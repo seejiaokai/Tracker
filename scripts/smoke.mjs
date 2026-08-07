@@ -667,12 +667,14 @@ const phoneFlow = await pg.evaluate(() => {
   const bd = document.getElementById('board');
   const wrap = document.querySelector('.flowwrap');
   const z = parseFloat(getComputedStyle(wrap).zoom) || 1;
-  /* Room measured as the gap the board adds under the chart itself, not as the
-     distance to the lowest event: some charts happen to end with hundreds of
-     px of empty layout and that made this pass without measuring the fix. */
+  /* The board's own bottom padding, read from the computed style. Deriving it
+     from scrollHeight minus the scaled wrapper height was wrong twice over:
+     charts that end with hundreds of px of empty layout passed without the
+     fix, and CSS zoom makes offsetHeight ambiguous, which hid the padding rule
+     being overridden by a shorthand further down the stylesheet. */
   return {
     clientW: bd.clientWidth, scrollW: bd.scrollWidth,
-    roomBelow: Math.round(bd.scrollHeight - wrap.offsetHeight * z),
+    roomBelow: Math.round(parseFloat(getComputedStyle(bd).paddingBottom) || 0),
     zoom: z,
   };
 });
@@ -680,7 +682,7 @@ ok('on a phone the chart fits the screen width, so it only scrolls up and down',
   phoneFlow.scrollW <= phoneFlow.clientW + 1,
   `${phoneFlow.scrollW}px of chart in ${phoneFlow.clientW}px of screen`);
 ok('a phone can scroll well past the end of the chart, clear of the zoom control',
-  phoneFlow.roomBelow >= 130, `${phoneFlow.roomBelow}px of room under the chart`);
+  phoneFlow.roomBelow >= 130, `${phoneFlow.roomBelow}px of padding under the chart`);
 
 /* Info tab: everything above the calendar has to fit without pinching. */
 await pg.click('.viewtabs button[data-view="info"]');
