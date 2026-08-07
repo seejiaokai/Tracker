@@ -176,6 +176,27 @@ for (const [name, syl] of Object.entries(SYLLABI)) {
 ok('no prereq points at a missing event', dangling.length === 0, dangling.slice(0, 3).join(', '));
 ok('no circular prereqs', cyclic.length === 0, [...new Set(cyclic)].slice(0, 3).join(', '));
 
+/* Hand-drawn connectors (the Line tool, layouts' __lines) carry their own arrowhead.
+   core.js lineArrow(): explicit arrow 0/1 draws a head at the end/start whatever the
+   anchor is, so a line left unfinished (b:null) renders an arrowhead into empty space —
+   and because a null end contributes nothing to lineCoveredPairs(), the automatic arrow
+   for the same link is drawn too, giving the doubled line the user photographed on 2026
+   (OPS-04, line Lmrvccxnly0a). A stub other lines hang off is fine; a lone one is not. */
+const { DEFAULT_LAYOUTS: LAYOUTS_FOR_LINES } = await import('../src/data/layouts.js');
+const stray = [];
+for (const [name, lay] of Object.entries(LAYOUTS_FOR_LINES)) {
+  const lines = Array.isArray(lay.__lines) ? lay.__lines : [];
+  const attached = new Set();
+  lines.forEach(l => ['a', 'b'].forEach(k => { if (l[k] && l[k].t === 'line') attached.add(l[k].id); }));
+  for (const l of lines) {
+    const arrow = (l.arrow == null) ? ((l.b && l.b.t === 'ball') ? 0 : 2) : l.arrow;
+    if (arrow === 2) continue;
+    const head = arrow === 0 ? l.b : l.a;
+    if (head == null && !attached.has(l.id)) stray.push(`${name}:${l.id}`);
+  }
+}
+ok('no hand-drawn line ends in an arrowhead pointing at nothing', stray.length === 0, stray.join(', '));
+
 /* 2026 links cross-checked against the Prerequisites row of the Jul 26 tables.
    Two extraction passes have now misread these off the flow-chart images, so
    they are pinned to the value the document states in words. */
