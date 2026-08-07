@@ -115,10 +115,10 @@ each other in seven places; use them only as a weak cross-check.
   `prereqs` array is the *only* source of flow-chart edges.
 - `src/data/layouts.js` — x/y positions only, no connection info.
 - `src/data/eventInfo.js` — names, format, hours.
-- `src/data/pristine.html` — the standalone single-file app that "⤓ Save as new
-  HTML" exports, with current data baked in. **Fixes in `core.js` usually need
-  porting here too**; it has its own copy of the same logic and has drifted before
-  (the `escapeId` XSS fix landed in `core.js` alone and sat unfixed here).
+- `src/app/fileFormat.js` — the shape of the user's saved file. No browser APIs
+  and no `core.js` import, so `smoke.mjs` checks it in plain Node.
+- `src/app/fileStore.js` — reaching the user's own files. Chrome and Edge write
+  back in place; elsewhere it downloads and says so.
 
 ## Superpowers plugin
 
@@ -139,7 +139,7 @@ are missing and the printed `claude plugin install` command is the fix.
   reaches the DOM is a *stored* XSS vector, not self-XSS. All of it flows through
   `escapeId()`, which must escape `& < > " '` — its output lands in HTML attributes.
 - Target elements by **ID** in tests (`#showAllBtn`, `#detailsBtn`, `#saveChanges`,
-  `#dupSyl`, `#addStu`, `#undoBtn`, `#editSyl`, `#cloudBtn`). Text matching breaks:
+  `#dupSyl`, `#addStu`, `#undoBtn`, `#editSyl`, `#openFileBtn`, `#saveCopyBtn`). Text matching breaks:
   `✓ Save changes` gains a `●` when dirty.
 - The app uses its own modal (`#dlgModal` / `#dlgInput` / `#dlgOk`), not native
   `prompt()`. Playwright's dialog handler will not catch it.
@@ -163,16 +163,14 @@ Per change, in order:
 1. **`npm run live` first**, before touching anything, whenever the user reports a
    bug — reproduce it on the thing they are actually looking at. Their reports have
    always been accurate; confirm *what* is wrong before guessing why.
-2. Make the change. Port it to `src/data/pristine.html` if it touches `core.js`.
+2. Make the change.
 3. `npm run smoke` — must be green, and extend it so it would have caught this bug.
    Prove the new check fails without the fix.
 4. Commit and push to the session branch.
-5. `node scripts/build-standalone.mjs` → `SendUserFile` if the user needs to *see* a
-   chart change. This is the only way they can review one before it ships.
-6. After it reaches `main` and the Pages run finishes: **`npm run live` again** to
+5. After it reaches `main` and the Pages run finishes: **`npm run live` again** to
    confirm the fix is really live, and look at the screenshot.
 
-**Step 6 cannot happen on a branch.** The deployed site is built from `main` only, so
-between steps 4 and 6 the live site still shows the old behaviour — that is expected,
+**Step 5 cannot happen on a branch.** The deployed site is built from `main` only, so
+between steps 4 and 5 the live site still shows the old behaviour — that is expected,
 not a failed fix. Do not describe a branch change as "live", and do not push to `main`
-to make step 6 possible. Wait for the merge, or say plainly that it is still pending.
+to make step 5 possible. Wait for the merge, or say plainly that it is still pending.

@@ -1,23 +1,10 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import * as core from '../app/core.js';
 
 export default function Header() {
-  const fileRef = useRef(null);
   const sylNames = core.ready ? core.orderedSylNames() : [];
   const sylValue = (core.plan && core.plan.sylName) || core.DEFAULT_SYL_NAME;
   const sylOptions = sylNames.includes(sylValue) ? sylNames : [...sylNames, sylValue];
-
-  const onImportFile = async e => {
-    const f = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (!f) return;
-    try {
-      const obj = JSON.parse(await f.text());
-      await core.importStateJson(obj);
-    } catch (err) {
-      core.uiAlert('Could not read that file as JSON.\n\n' + ((err && err.message) || err));
-    }
-  };
 
   return (
     <header>
@@ -63,12 +50,6 @@ export default function Header() {
         {core.openFileHasStudents ? <span className="sub" id="fileHasStudents">· contains student data</span> : null}
         <label className="sub"><input type="checkbox" id="optCharts" checked={core.saveOpts.charts} onChange={e => core.setSaveOpt('charts', e.target.checked)} /> Charts</label>
         <label className="sub"><input type="checkbox" id="optStudents" checked={core.saveOpts.students} onChange={e => core.setSaveOpt('students', e.target.checked)} /> Students &amp; courses</label>
-        <button className="sm" id="cloudBtn" title={core.cloudBtn.title} onClick={core.cloudButtonClick}>{core.cloudBtn.text}</button>
-        <button className="sm" id="loadLatestBtn" title="Pull the latest data from the cloud right now" onClick={() => core.loadLatest()}>⟳ Load latest</button>
-        <button className="sm" id="saveBtn" title="Force-save now and write a timestamped backup" onClick={core.saveBackup}>💾 Save backup</button>
-        <button className="sm" id="importBtn" title="Load a previously downloaded OCU_state JSON backup into this browser" onClick={() => fileRef.current && fileRef.current.click()}>⤒ Load backup</button>
-        <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={onImportFile} />
-        <button className="sm" id="exportHtmlBtn" title="Download an updated copy of the original single-file tool with everything baked in: syllabi, flow charts, event info, courses, students, marks and dates" onClick={core.exportBakedHtml}>⤓ Save as new HTML</button>
         <button className="sm" id="showAllBtn" title="Show name, crew & prerequisites for every event" onClick={core.openShowAll}>☰ Show All</button>
         <button className={'sm' + (core.showDetails ? ' primary' : '')} id="detailsBtn" title="Show title, type, crew & prerequisites on every ball on the flow chart" onClick={core.toggleDetails}>📋 Show All Details</button>
         <span id="saveStat" className={'savestat ' + core.saveStat.cls}>{core.saveStat.text}</span>

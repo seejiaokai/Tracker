@@ -6,8 +6,7 @@ export default defineConfig({
   base: process.env.GITHUB_PAGES ? '/Tracker/' : '/',
   plugins: [react()],
   build: {
-    // The pristine single-file HTML (used by "Save as new HTML") is bundled
-    // as a raw string and is ~550 kB on its own; quieten the size warning.
+    // One bundle, no code splitting; quieten Vite's default size warning.
     chunkSizeWarningLimit: 1500,
   },
 });

@@ -31,11 +31,9 @@ UI — see CLAUDE.md.
 
 ## Sample data
 
-`sample-data/OCU_state_sample.json` is a full state export, the same thing the
-**💾 Save backup** button downloads.
-
-Load it with **⤒ Load backup** in the header toolbar: courses, rosters, marks,
-dates, plans and custom syllabi all come back.
+`sample-data/OCU_state_sample.json` is a legacy state export kept as a fixture
+for the smoke suite. The app no longer reads it — your work lives in the file
+you open with **📁 Open**.
 
 ## Layout
 
@@ -43,6 +41,6 @@ dates, plans and custom syllabi all come back.
 | --- | --- |
 | `src/app/core.js` | App state, storage keys, graph/geometry logic, and the flow board. The board stays direct-DOM for drag/pan performance, wrapped by the React `Board` component. |
 | `src/components/` | React components: header, arrange tools, side panel, grade popover, Show All panel, modals. |
-| `src/data/` | Syllabi, default layouts, event info and seed state, taken verbatim from the original app — plus `pristine.html`, the standalone copy that **⤓ Save as new HTML** exports with your data baked in. |
+| `src/data/` | Syllabi, default layouts, event info and seed state, taken verbatim from the original app. |
 | `src/sync/` | SharePoint/localStorage layer, and the Dataverse/Firebase cloud layer. |
 | `scripts/smoke.mjs` | The browser test suite behind `npm run smoke`. |

@@ -278,6 +278,14 @@ ok('a real save shows its size and the time on the toolbar',
 ok('a real save writes the whole file', good.bytes > 10000, `${good.bytes} bytes`);
 await pg.evaluate(() => window.__setFileHandleForTests(null));
 
+/* ---- the buttons the file replaces are gone ----
+   The sync machinery under ☁ Cloud stays: it is how ALL saving works,
+   including saving to the browser. Only the buttons go. */
+for (const id of ['#cloudBtn', '#loadLatestBtn', '#saveBtn', '#importBtn', '#exportHtmlBtn'])
+  ok(`${id} is gone from the toolbar`, await pg.locator(id).count() === 0);
+ok('saving still works with no cloud button',
+  (await pg.textContent('#saveStat')).trim().length > 0);
+
 /* ---- Save a copy: the handover case, which must start clean every time ---- */
 await pg.click('#saveCopyBtn'); await pg.waitForTimeout(600);
 ok('Save a copy opens a dialog', await pg.locator('#copyModal').count() === 1);
@@ -640,7 +648,7 @@ const { join } = await import('node:path');
 const REPO = join(import.meta.dirname, '..');
 const PLACEHOLDER = /^(STUDENT [A-Z]|TEST)$/;
 const rosterLeaks = [];
-for (const f of ['src/app/core.js', 'src/data/pristine.html', 'sample-data/OCU_state_sample.json']) {
+for (const f of ['src/app/core.js', 'sample-data/OCU_state_sample.json']) {
   const txt = readFileSync(join(REPO, f), 'utf8');
   /* every quoted name inside a roster array literal, however it is written */
   for (const m of txt.matchAll(/roster[^\n]{0,80}?\[((?:\s*['"][^'"]*['"]\s*,?)+)\]/gi))
