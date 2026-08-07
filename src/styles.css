@@ -311,9 +311,6 @@ small.hint{color:var(--muted);font-size:11px}
  .paceGrid .o{padding:6px}
  .paceRow .r,.opt2 .o .r{font-size:15px}
  .chips{gap:4px}.chip{padding:2px 7px}
- /* Set on the phone from the calendar pop-up, so the panel copy is dead weight
-    on the screen where space is scarcest. */
- #calCard{display:none}
  /* The bar took 281px before a single statistic appeared, and still 175 after
     tightening, because 10 controls wrap onto four rows in 390px. One row that
     scrolls sideways is 44px whatever it holds — that is 130px of screen handed
