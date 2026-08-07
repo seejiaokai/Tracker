@@ -192,7 +192,9 @@ export default function SidePanel({ zoom }) {
         <div className="mini" style={{ marginTop: 5 }}>Two chips = the flow branches; either can be flown next.</div>
       </div>
       <div className="card c-plan">
-        <h3>Plannable now <span className="mini" style={{ fontWeight: 400 }}>(shows up to 5 rows)</span><span className="who"> — {s}</span></h3>
+        <h3>{/* One flex child, or space-between spreads the three pieces across the
+            whole heading. */}
+          <span>Plannable now <span className="mini" style={{ fontWeight: 400 }}>(shows up to 5 rows)</span><span className="who"> — {s}</span></span></h3>
         <div className="chips">
           {near.length
             ? near.map(e => <span key={e.id} className="chip" style={{ borderColor: core.TYPE_COLOR[e.type] }}><b>{e.id}</b></span>)
