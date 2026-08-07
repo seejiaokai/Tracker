@@ -21,7 +21,7 @@ date may enter it. Two smoke checks enforce this.
 
 ## Where things stand
 
-`main` and `claude/read-handoff-tyugyx` are level. `npm run smoke` is **130 checks, green**.
+`main` and `claude/read-handoff-tyugyx` are level. `npm run smoke` is **131 checks, green**.
 All five interface packages are merged and verified live except the last, which was still
 publishing at handoff — **run `npm run live` and look at the screenshot before anything else.**
 
@@ -112,5 +112,5 @@ the reload problem.
 
 ## Testing
 
-`npm run smoke` — 130 checks, must be green before every commit touching `src/`.
+`npm run smoke` — 131 checks, must be green before every commit touching `src/`.
 `npm run live` — the deployed site, after the Pages run finishes. Never call a branch "live".

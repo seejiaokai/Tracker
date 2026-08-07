@@ -695,6 +695,23 @@ const phoneStats = await pg.evaluate(() => {
     })),
   };
 });
+/* The panel zoom control is fixed to the bottom of the screen; centred, it sat
+   on top of the last card's buttons. */
+const zoomOverlap = await pg.evaluate(() => {
+  const z = document.getElementById('sideZoomCtl');
+  if (!z) return { none: true };
+  const r = z.getBoundingClientRect();
+  if (!r.width) return { none: true };
+  const hit = [...document.querySelectorAll('#side .card')].filter(c => {
+    const b = c.getBoundingClientRect();
+    return r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top;
+  }).map(c => ((c.querySelector('h3') || {}).textContent || '').trim().slice(0, 18));
+  return { hit, z: [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)] };
+});
+ok('the panel zoom control does not sit on top of a card',
+  zoomOverlap.none || zoomOverlap.hit.length === 0,
+  (zoomOverlap.hit && zoomOverlap.hit.length) ? `covers ${zoomOverlap.hit.join(', ')} — control at ${JSON.stringify(zoomOverlap.z)}` : '');
+
 ok('every statistic fits on one phone screen, no pinching to photograph it',
   phoneStats.scrollH <= phoneStats.clientH,
   `${phoneStats.scrollH}px of stats in ${phoneStats.clientH}px of screen — `

@@ -94,7 +94,14 @@ button.sm{padding:3px 7px;font-size:11px}
 /* The two controls were pixel-identical; only their screen corner said which
    half of the app they zoomed. */
 .zoomwho{font-size:10px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);padding-right:2px}
-@media(max-width:1050px){ body.tab-flow #sideZoomCtl{display:none} #sideZoomCtl{right:50%;transform:translateX(50%)} }
+/* Bottom-right, not centred: centred it landed on the last card's buttons. The
+   Chart/Panel labels go too — only one control is ever visible on a phone, and
+   at 200px wide the labelled control still reached into the left column. */
+@media(max-width:1050px){
+ body.tab-flow #sideZoomCtl{display:none}
+ .zoomwho{display:none}
+ #sideZoomCtl,#flowZoomCtl{padding:3px 5px;gap:3px}
+}
 #flowZoomCtl{position:fixed;z-index:60;left:14px;bottom:14px;display:flex;gap:4px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:4px 6px;box-shadow:0 4px 14px rgba(0,0,0,.45)}
 #flowZoomCtl button{padding:2px 8px;font-size:14px;line-height:1.2;min-width:26px}
 #flowZoomCtl #fzReset{font-size:11px;min-width:0}
