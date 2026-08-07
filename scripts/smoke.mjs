@@ -278,6 +278,42 @@ ok('a real save shows its size and the time on the toolbar',
 ok('a real save writes the whole file', good.bytes > 10000, `${good.bytes} bytes`);
 await pg.evaluate(() => window.__setFileHandleForTests(null));
 
+/* ---- the buttons the file replaces are gone ----
+   The sync machinery under ☁ Cloud stays: it is how ALL saving works,
+   including saving to the browser. Only the buttons go. */
+for (const id of ['#cloudBtn', '#loadLatestBtn', '#saveBtn', '#importBtn', '#exportHtmlBtn'])
+  ok(`${id} is gone from the toolbar`, await pg.locator(id).count() === 0);
+ok('saving still works with no cloud button',
+  (await pg.textContent('#saveStat')).trim().length > 0);
+
+/* ---- Save a copy: the handover case, which must start clean every time ---- */
+await pg.click('#saveCopyBtn'); await pg.waitForTimeout(600);
+ok('Save a copy opens a dialog', await pg.locator('#copyModal').count() === 1);
+ok('Save a copy starts with students unticked', !(await pg.isChecked('#copyStudents')));
+ok('Save a copy lists the syllabi to tick', await pg.locator('#copySylList input').count() >= 4);
+ok('Save a copy sits above the Show All panel (81)',
+  await pg.evaluate(() => +getComputedStyle(document.getElementById('copyModal')).zIndex) > 81);
+await pg.check('#copyStudents'); await pg.click('#copyCancel'); await pg.waitForTimeout(400);
+await pg.click('#saveCopyBtn'); await pg.waitForTimeout(600);
+ok('Save a copy resets students to unticked every time', !(await pg.isChecked('#copyStudents')));
+await pg.click('#copyCancel'); await pg.waitForTimeout(300);
+
+/* ---- Import: drop one syllabus in without disturbing the rest ---- */
+ok('the Import button exists', await pg.locator('#importSylBtn').count() === 1);
+const imported = await pg.evaluate(async () => {
+  const t = window.__coreForTests;
+  const charts = await t.collectCharts(['2026']);
+  charts.syllabi['2026'] = charts.syllabi['2026'].slice(0, 4);
+  const marksBefore = Object.keys(localStorage).filter(k => k.includes(':m:')).length;
+  await t.applyCharts(charts, { names: ['2026'], mode: 'add', rename: { from: '2026', to: 'SMOKE NEW SYL' } });
+  const all = JSON.parse(localStorage['ocu:v3:master:syls']);
+  return { added: (all['SMOKE NEW SYL'] || []).length, original: (all['2026'] || []).length,
+           marks: Object.keys(localStorage).filter(k => k.includes(':m:')).length, marksBefore };
+});
+ok('importing as new creates a separate syllabus', imported.added === 4, `${imported.added} events`);
+ok('importing as new leaves the original syllabus alone', imported.original > 100, `${imported.original} events`);
+ok('importing as new leaves every mark in place', imported.marks === imported.marksBefore);
+
 /* ---- writing charts back never disturbs people ---- */
 const applied = await pg.evaluate(async () => {
   const t = window.__coreForTests; if (!t) return null;
@@ -612,7 +648,7 @@ const { join } = await import('node:path');
 const REPO = join(import.meta.dirname, '..');
 const PLACEHOLDER = /^(STUDENT [A-Z]|TEST)$/;
 const rosterLeaks = [];
-for (const f of ['src/app/core.js', 'src/data/pristine.html', 'sample-data/OCU_state_sample.json']) {
+for (const f of ['src/app/core.js', 'sample-data/OCU_state_sample.json']) {
   const txt = readFileSync(join(REPO, f), 'utf8');
   /* every quoted name inside a roster array literal, however it is written */
   for (const m of txt.matchAll(/roster[^\n]{0,80}?\[((?:\s*['"][^'"]*['"]\s*,?)+)\]/gi))

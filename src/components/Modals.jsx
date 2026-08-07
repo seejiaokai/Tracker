@@ -218,3 +218,50 @@ export function OrdModal() {
   if (!core.ordOpen) return null;
   return <OrdModalInner />;
 }
+
+/* ---------- Save a copy: pick what goes into a file you hand over ---------- */
+function CopyModalInner() {
+  const names = core.orderedSylNames();
+  const picked = names.filter(n => core.copyPick[n]).length;
+  return (
+    <>
+      <div className="overlay" id="copyOverlay" style={{ zIndex: 90, display: 'block' }} onClick={core.closeCopy}></div>
+      <div className="modal" id="copyModal" style={{ zIndex: 91, width: 'min(460px, 92vw)', display: 'block' }}>
+        <div style={{ fontWeight: 600, marginBottom: 10 }}>Save a copy</div>
+        <div className="mini" style={{ marginBottom: 10 }}>
+          For handing work over. Your own file is not touched.
+        </div>
+        <label style={{ display: 'block', marginBottom: 6 }}>
+          <input type="checkbox" id="copyCharts" checked={core.copyOpts.charts}
+            onChange={e => core.setCopyOpt('charts', e.target.checked)} /> Charts
+        </label>
+        <label style={{ display: 'block', marginBottom: 4 }}>
+          <input type="checkbox" id="copyStudents" checked={core.copyOpts.students}
+            onChange={e => core.setCopyOpt('students', e.target.checked)} /> Students &amp; courses
+        </label>
+        <div className="mini" id="copyWarn" style={{ marginBottom: 10, opacity: core.copyOpts.students ? 1 : 0.65 }}>
+          {core.copyOpts.students
+            ? '⚠ This copy will contain real names and marks. Only send it to someone entitled to see them.'
+            : 'Names and marks stay out — safe to send.'}
+        </div>
+        <div className="mini" style={{ marginBottom: 6 }}>Syllabi to include ({picked} ticked)</div>
+        <div id="copySylList" style={{ maxHeight: '30vh', overflow: 'auto', border: '1px solid var(--line)', borderRadius: 8, padding: 6 }}>
+          {names.map(n => (
+            <label key={n} style={{ display: 'block', padding: '2px 4px' }}>
+              <input type="checkbox" checked={!!core.copyPick[n]}
+                onChange={e => core.setCopyPick(n, e.target.checked)} /> {n}
+            </label>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
+          <button id="copyCancel" onClick={core.closeCopy}>Cancel</button>
+          <button className="primary" id="copyOk" onClick={core.saveCopyClick}>Save copy</button>
+        </div>
+      </div>
+    </>
+  );
+}
+export function CopyModal() {
+  if (!core.copyOpen) return null;
+  return <CopyModalInner />;
+}

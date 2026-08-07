@@ -6,7 +6,7 @@ import ArrangeTools from './components/ArrangeTools.jsx';
 import SidePanel from './components/SidePanel.jsx';
 import Pop from './components/Pop.jsx';
 import ShowAllPanel from './components/ShowAllPanel.jsx';
-import { EditModal, InfoModal, SylModal, OrdModal, DlgModal } from './components/Modals.jsx';
+import { EditModal, InfoModal, SylModal, OrdModal, CopyModal, DlgModal } from './components/Modals.jsx';
 import { SideZoomCtl, FlowZoomCtl } from './components/ZoomControls.jsx';
 
 function Board() {
@@ -88,6 +88,7 @@ export default function App() {
       <ShowAllPanel />
       <InfoModal />
       <OrdModal />
+      <CopyModal />
       <EditModal />
       <SylModal />
       <DlgModal />

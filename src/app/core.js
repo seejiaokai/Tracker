@@ -13,7 +13,6 @@ import { SEED_STATE, SEED_STAMP } from '../data/seedState.js';
 import { storage, flushNow, loadLatest, cloudButtonClick, setCloudSinks, getCloudCache, cloudCfg } from '../sync/cloud.js';
 import * as FMT from './fileFormat.js';
 import * as FS from './fileStore.js';
-import PRISTINE_HTML from '../data/pristine.html?raw';
 
 export { SYLLABI, SYL_NAMES, DEFAULT_SYL_NAME, DEFAULT_SYL_ORDER, DEFAULT_LAYOUTS, EVENT_INFO };
 export { cloudButtonClick };
@@ -2231,130 +2230,18 @@ function setSaveStatus(msg, cls) {
   };
   notify();
 }
-async function collectState() { // gather every stored key into one object (for standalone JSON download)
-  const out = {};
-  try {
-    if (storage && storage.list) {
-      const r = await storage.list(); const keys = (r && r.keys) || [];
-      for (const k of keys) { try { const g = await storage.get(k); if (g) out[k] = g.value; } catch (e) {} }
-    }
-  } catch (e) {}
-  Object.assign(out, getCloudCache());
-  Object.assign(out, mem);
-  return out;
-}
-export async function saveBackup() {
-  setSaveStatus('', 'saving');
-  try { if (typeof flushNow === 'function') await flushNow(); } catch (e) {}
-  if (typeof google !== 'undefined' && google.script && google.script.run) {
-    google.script.run.withSuccessHandler(function (n) { setSaveStatus('backup: ' + n, 'ok'); })
-      .withFailureHandler(function () { setSaveStatus('backup failed', 'err'); })
-      .makeBackup();
-  } else {
-    try {
-      const data = await collectState();
-      const txt = JSON.stringify(data, null, 2);
-      if (typeof URL !== 'undefined' && URL.createObjectURL) {
-        const blob = new Blob([txt], { type: 'application/json' });
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-        a.download = 'OCU_state_' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.json';
-        document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
-        setSaveStatus('backup downloaded', 'ok');
-      } else { setSaveStatus('saved', 'ok'); }
-    } catch (e) { setSaveStatus('saved', 'ok'); }
-  }
-}
-/* Import a previously saved OCU_state JSON backup (an object of key -> value
-   strings, exactly what "Save backup" downloads). Every key is written back
-   into storage and the app reloads from it. */
-export async function importStateJson(obj) {
-  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) { await uiAlert('That file does not look like an OCU_state backup (expected a JSON object of keys).'); return; }
-  let n = 0;
-  for (const k in obj) { const v = obj[k]; if (typeof v === 'string') { await sSet(k, v); n++; } }
-  await reloadFromStore();
-  setSaveStatus('imported ' + n + ' keys', 'ok');
-}
 
-/* ---------- export a self-contained HTML with all changes baked in ---------- */
-const BAKE_SKIP_EXACT = [SYL_NS + ':syls', SYL_NS + ':sylorder', SYL_NS + ':sylalias', SYL_NS + ':sylhidden', SYL_NS + ':syltomb', 'v3:eventinfo', 'v3:seedstamp'];
-function bakeSkip(k) {
-  if (BAKE_SKIP_EXACT.indexOf(k) >= 0) return true;
-  if (k.indexOf(SYL_NS + ':lay:') === 0) return true;   /* baked into DEFAULT_LAYOUTS */
-  if (k.indexOf('v3:lay:') === 0) return true;          /* legacy per-course layouts */
-  if (/^v3:[^:]+:syls$/.test(k)) return true;           /* legacy per-course syllabi */
-  return false;
-}
-async function bakeState() {
-  const names = orderedSylNames();
-  const syl = {}, lay = {};
-  for (const n of names) {
-    const src = sylSource(n); if (!src) continue;
-    syl[n] = JSON.parse(JSON.stringify(src));
-    const base = DEFAULT_LAYOUTS[n] ? JSON.parse(JSON.stringify(DEFAULT_LAYOUTS[n])) : {};
-    let saved = null;
-    try { const r = await sGet(kLayoutFor(course, n)); if (r) saved = JSON.parse(r); } catch (_) {}
-    if (n === curSyl() && layout && layoutNodeCount(layout))
-      saved = Object.assign({}, saved || {}, layout);   /* include unsaved on-screen edits */
-    if (saved) Object.assign(base, saved);
-    if (Object.keys(base).length) lay[n] = base;
-  }
-  const ei = JSON.parse(JSON.stringify(EVENT_INFO));
-  for (const k in (eventInfo || {})) ei[k] = Object.assign({}, ei[k] || {}, eventInfo[k]);
-  const seed = {};
-  const all = await collectState();
-  for (const k in all) { if (!bakeSkip(k) && all[k] != null && all[k] !== '') seed[k] = all[k]; }
-  return { names: names, syl: syl, lay: lay, ei: ei, seed: seed };
-}
-function bakeJSON(o) { return JSON.stringify(o).replace(/<\//g, '<\\/').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029'); }
-export async function exportBakedHtml() {
-  setSaveStatus('', 'saving');
-  try { if (typeof flushNow === 'function') await flushNow(); } catch (e) {}
-  try {
-    const b = await bakeState();
-    const stamp = new Date().toISOString();
-    const block =
-      '/*==OCU-' + 'BAKED:BEGIN==*/\n' +
-      'const SYLLABI = ' + bakeJSON(b.syl) + ';\n' +
-      'const DEFAULT_LAYOUTS = ' + bakeJSON(b.lay) + ';\n' +
-      'const SYL_NAMES = Object.keys(SYLLABI);\n' +
-      'const DEFAULT_SYL_NAME = ' + bakeJSON(b.names[0] || DEFAULT_SYL_NAME) + ';\n' +
-      'const DEFAULT_SYL_ORDER = ' + bakeJSON(b.names) + ';\n' +
-      'const EVENT_INFO=' + bakeJSON(b.ei) + ';\n' +
-      '/* Course/student data captured at export time; seeded into storage on first run. */\n' +
-      'const SEED_STATE = ' + bakeJSON(b.seed) + ';\n' +
-      'const SEED_STAMP = ' + bakeJSON(stamp) + ';\n' +
-      '/*==OCU-' + 'BAKED:END==*/';
-    const re = new RegExp('/\\*==OCU-BAKED:BEGIN==\\*/[\\s\\S]*?/\\*==OCU-BAKED:END==\\*/');
-    if (!re.test(PRISTINE_HTML)) { setSaveStatus('export failed', 'err'); return; }
-    let out = PRISTINE_HTML.replace(re, function () { return block; });
-    try {  /* carry the cloud settings across, so copies you hand out are pre-connected */
-      const cc = cloudCfgFn();
-      if (cc) {
-        const cBlock = '/*==OCU-' + 'CLOUD:BEGIN==*/\nconst CLOUD_CONFIG = ' + bakeJSON(cc) + ';\n/*==OCU-' + 'CLOUD:END==*/';
-        const cre = new RegExp('/\\*==OCU-CLOUD:BEGIN==\\*/[\\s\\S]*?/\\*==OCU-CLOUD:END==\\*/');
-        if (cre.test(out)) out = out.replace(cre, function () { return cBlock; });
-      }
-    } catch (e) {}
-    const blob = new Blob([out], { type: 'text/html' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = 'OCU_Progress_Tracker_' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.html';
-    document.body.appendChild(a); a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
-    setSaveStatus('HTML exported (' + Object.keys(b.seed).length + ' data keys)', 'ok');
-  } catch (e) { setSaveStatus('export failed', 'err'); }
-}
+/* Seed a brand-new browser from SEED_STATE, once.
 
-/* Adopt the data baked into this file (see original comments). */
+   It used to delete every stored syllabus and layout first, so that a freshly
+   baked standalone HTML would show its own charts rather than the viewer's
+   saved overrides. That export is gone, and with it the only reason to do
+   something so destructive: bumping SEED_STAMP would now wipe the user's own
+   charts out of their browser. Seeding only adds. */
 async function applyBundle() {
   if (typeof SEED_STAMP === 'undefined' || !SEED_STAMP) return;
   let cur = null; try { cur = await sGet('v3:seedstamp'); } catch (e) {}
   if (cur === SEED_STAMP) return;
-  try {
-    if (storage && storage.list) {
-      const r = await storage.list();
-      for (const k of ((r && r.keys) || [])) if (bakeSkip(k)) await delKey(k);
-    }
-  } catch (e) {}
   for (const k in (SEED_STATE || {})) { try { await sSet(k, SEED_STATE[k]); } catch (_) {} }
   try { await sSet('v3:seedstamp', SEED_STAMP); } catch (e) {}
 }
@@ -2525,6 +2412,82 @@ export async function openFileClick() {
   saveOpts = { charts: saveOpts.charts || info.charts, students: saveOpts.students || info.students };
   fileDirty = false;
   setSaveStatus('opened ' + openFileName, 'ok'); notify();
+}
+
+/* ---------- Save a copy: the handover case ----------
+   Students start OFF and are reset OFF on every open, not just the first. This
+   is the moment a file leaves the owner's hands, so it begins clean and they
+   have to opt in — the safety measure agreed when tick-boxes were chosen over
+   two files that cannot mix. */
+export let copyOpen = false, copyOpts = { charts: true, students: false }, copyPick = {};
+export function openCopy() {
+  copyOpts = { charts: true, students: false };
+  copyPick = {}; orderedSylNames().forEach(n => { copyPick[n] = (n === curSyl()); });
+  copyOpen = true; notify();
+}
+export function closeCopy() { copyOpen = false; notify(); }
+export function setCopyOpt(which, on) { copyOpts = { ...copyOpts, [which]: !!on }; notify(); }
+export function setCopyPick(name, on) { copyPick = { ...copyPick, [name]: !!on }; notify(); }
+
+export async function saveCopyClick() {
+  const names = Object.keys(copyPick).filter(n => copyPick[n]);
+  if (!copyOpts.charts && !copyOpts.students) { await uiAlert('Tick charts, students, or both.'); return; }
+  if (copyOpts.charts && !names.length) { await uiAlert('Tick at least one syllabus.'); return; }
+  const savedAt = new Date().toISOString();
+  const opts = { ...copyOpts };
+  const name = FMT.suggestedFileName(opts, savedAt);
+  let handle = null;
+  if (FS.canWriteInPlace()) { handle = await FS.pickSave(name); if (!handle) return; }
+  const text = JSON.stringify(FMT.buildFile({
+    charts: opts.charts ? await collectCharts(names) : null,
+    students: opts.students ? await collectStudents() : null, savedAt }), null, 2);
+  try {
+    if (handle) await FS.writeTo(handle, text); else FS.downloadInstead(name, text);
+  } catch (err) {
+    closeCopy(); setSaveStatus('copy NOT saved — ' + ((err && err.message) || err), 'err'); notify(); return;
+  }
+  closeCopy();
+  setSaveStatus('', 'ok'); notify();
+  await uiAlert('Copy saved as “' + (handle ? handle.name : name) + '”.\n\n'
+    + (opts.students ? 'It CONTAINS student names and marks.' : 'It contains charts only — no student names or marks.'));
+}
+
+/* Take one syllabus out of another file and drop it into what is already here —
+   for when a new syllabus is issued. Marks are never touched either way:
+   applyCharts writes no roster, mark or date key, which smoke.mjs pins by
+   watching every storage write. */
+export async function importSyllabusClick() {
+  if (!FS.canWriteInPlace()) { await uiAlert('This browser cannot open a file directly.\n\nUse Chrome or Edge.'); return; }
+  const picked = await FS.pickOpen();          /* no await before this — gesture */
+  if (!picked) return;
+  let obj; try { obj = JSON.parse(picked.text); } catch (_) { await uiAlert('That file is not readable as JSON.'); return; }
+  let info; try { info = FMT.describeFile(obj); } catch (e) { await uiAlert(e.message); return; }
+  if (!info.charts || !info.syllabusNames.length) { await uiAlert('That file holds no charts.'); return; }
+  const { charts } = FMT.readFile(obj);
+  const done = [];
+  for (const name of info.syllabusNames) {
+    if (!allSylNames().includes(name)) {
+      await applyCharts(charts, { names: [name], mode: 'replace', rename: null });
+      done.push(name); continue;
+    }
+    const c = await uiChoice(
+      '“' + name + '” already exists.\n\nReplace it, or add the incoming one under a new name?',
+      'Replace it', 'Add as new');
+    if (c === 'cancel') continue;
+    if (c === 'ok') {
+      await applyCharts(charts, { names: [name], mode: 'replace', rename: null });
+      done.push(name); continue;
+    }
+    const to = ((await uiPrompt('Name for the incoming syllabus:', name + ' (new)')) || '').trim();
+    if (!to || allSylNames().includes(to)) { await uiAlert('That name is blank or already taken.'); continue; }
+    await applyCharts(charts, { names: [name], mode: 'add', rename: { from: name, to } });
+    done.push(to);
+  }
+  if (done.length) { markFileDirty(); setSaveStatus('', 'ok'); }
+  await uiAlert(done.length
+    ? 'Brought in: ' + done.join(', ') + '.\n\nEveryone’s marks are untouched.\nPress Save changes to write this into your file.'
+    : 'Nothing was brought in.');
+  notify();
 }
 
 /* One Save button, not two. It saves the syllabus into the browser as it always
