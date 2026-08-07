@@ -263,6 +263,25 @@ const badRef = Object.entries(REFRESHER_2026).filter(([id, want]) =>
 ok('2026 carries the DAAR / NAAR refresher chain', badRef.length === 0,
   badRef.map(([id]) => `${id}=${by26r[id] ? '[' + (by26r[id].prereqs || []).join(',') + ']' : 'MISSING'}`).join(' | '));
 
+/* The A/G - A/A surface-attack sim chain. Page B-28 appears to break it: SA(S)-2's only line
+   runs left into SA-1, SA(S)-3 looks fed only by AGW-02, and SA(S)-5 only by IAT-12. Three
+   independent readings all concluded the links were absent and should be deleted. THEY MUST
+   NOT BE. The user, who owns the syllabus, confirmed twice that the chain runs
+   SA(S)-2 -> SA(S)-3 -> SA(S)-4 -> SA(S)-5; on the 2026 map the same run is drawn continuously
+   across pages B-18 to B-20 via joins EE and II. Deleting these would let a student fly a sim
+   out of order. Pinned so the next reading of B-28 cannot quietly undo it. */
+const AGAA_SIM_CHAIN = {
+  'SA(S)-2': ['SA(S)-1'],
+  'SA(S)-3': ['SA(S)-2', 'AGW-02'],
+  'SA(S)-4': ['SA(S)-3'],
+  'SA(S)-5': ['SA(S)-4', 'IAT-12'],
+};
+const byAGs = Object.fromEntries(SYLLABI['A/G - A/A 2026'].map(e => [e.id, e]));
+const brokenChain = Object.entries(AGAA_SIM_CHAIN).filter(([id, want]) =>
+  JSON.stringify((byAGs[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+ok('A/G - A/A sim chain SA(S)-2 -> -3 -> -4 -> -5 stays joined', brokenChain.length === 0,
+  brokenChain.map(([id]) => `${id}=[${(byAGs[id]?.prereqs || []).join(',')}]`).join(' | '));
+
 /* Read off the A/G - A/A map (images 20-29) and confirmed by a second independent reading,
    then approved by the user. Each was a link the drawing carries but the syllabus had lost;
    all four ADD a prerequisite, so they can only delay an event, never unlock one early. */
