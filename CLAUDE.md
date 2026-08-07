@@ -141,14 +141,29 @@ are missing and the printed `claude plugin install` command is the fix.
 - Target elements by **ID** in tests (`#showAllBtn`, `#detailsBtn`, `#saveChanges`,
   `#dupSyl`, `#addStu`, `#undoBtn`, `#editSyl`, `#openFileBtn`, `#saveCopyBtn`). Text matching breaks:
   `✓ Save changes` gains a `●` when dirty.
+- **Most of those now sit inside a menu** — `#courseMenuBtn`, `#sylMenuBtn`,
+  `#fileMenuBtn`, `#viewMenuBtn`. Clicking one directly times out; open its menu
+  first. Panels stay in the DOM and hide with CSS, so `textContent` and
+  `isChecked` still work while shut.
+- `#saveChanges` **only exists while something is unsaved.** `count() === 1` is
+  the wrong assertion; make the app dirty first, or assert `<= 1`.
 - The app uses its own modal (`#dlgModal` / `#dlgInput` / `#dlgOk`), not native
   `prompt()`. Playwright's dialog handler will not catch it.
 - The Cloud dialog is a raw `position:fixed` div at `z-index:99999` with no
   `.modal`/`.overlay` class. Close it via `#cbCancel` or it silently swallows
   every later click.
-- z-index ladder: `.modal` 60 · `#dlgModal`/`#ordModal` 71 · `#showAllPanel` 81 ·
-  `#infoModal` 91 · Cloud dialog 99999. Anything new that opens *over* Show All
-  must clear 81.
+- z-index ladder: `.modal` 60 · `.lullcal` 70 · `#dlgModal`/`#ordModal` 71 ·
+  `#showAllPanel` 81 · `#infoModal` 91 · Cloud dialog 99999. Header menus 50.
+  Anything new that opens *over* Show All must clear 81.
+- The page column lives on **`#root`**, not `body` — React mounts everything
+  inside it, so a flex column on `body` lays out `#root` alone and the whole page
+  scrolls instead of the board. `#root` needs `min-width:0` too, or the phone's
+  scrollable one-row header widens every card.
+- Grid columns: always `minmax(0,1fr)`, never `1fr`. A bare `1fr` takes its
+  minimum from content, and a `dd/mm/yyyy` box then pushes the panel wider than
+  the screen. This has bitten three separate layouts.
+- `scrollHeight` never reports less than `clientHeight`, so "fits exactly" and
+  "fits with room to spare" look identical. Measure the content to get the margin.
 - Pages deploys: `concurrency.cancel-in-progress` must stay `false`. Cancelling a
   run mid-deploy orphans the Pages deployment it registered and the next run then
   times out after 10 minutes in `deployment_queued`.
