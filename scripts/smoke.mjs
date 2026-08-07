@@ -400,6 +400,141 @@ ok('drawn lines, arrowheads and font sizes survive too',
   trip ? `${trip.metaBefore} vs ${trip.metaAfter}` : '');
 ok('the saved text names nobody when students are not ticked', !!trip && !trip.hasPeople);
 
+/* ---- interface layout: things only a real browser can measure ----
+   Every one of these was confirmed red against the code that preceded it.
+   They guard geometry, so they assert measured boxes, never class names. */
+
+/* The pace card overflowed its panel by 118px: three date boxes needing 419px
+   in 301px, putting End date B 84px off the right edge of the window. */
+const pace = await pg.evaluate(() => {
+  const card = [...document.querySelectorAll('#side .card')]
+    .find(c => /pace/i.test((c.querySelector('h3') || {}).textContent || ''));
+  if (!card) return null;
+  const side = document.getElementById('side').getBoundingClientRect();
+  const dates = [...card.querySelectorAll('input[type=date]')].map(i => i.getBoundingClientRect());
+  const grids = [...card.querySelectorAll('div')].map(d => d.scrollWidth - d.clientWidth);
+  return {
+    dates: dates.length,
+    worstOverflow: Math.max(0, ...grids),
+    pastRight: Math.round(Math.max(0, ...dates.map(r => r.right - side.right))),
+    clipped: dates.some(r => r.width < 100),
+  };
+});
+ok('the pace card has both end-date boxes', !!pace && pace.dates === 2, pace ? `${pace.dates}` : 'no card');
+ok('nothing in the pace card overflows its row', !!pace && pace.worstOverflow <= 1,
+  pace ? `${pace.worstOverflow}px of overflow` : '');
+ok('no end-date box runs off the side panel', !!pace && pace.pastRight <= 1,
+  pace ? `${pace.pastRight}px past the edge` : '');
+ok('no end-date box is squeezed too narrow to read', !!pace && !pace.clipped);
+
+/* The edit toolbar floated over the board at (360,128) and swallowed ST-01:
+   elementFromPoint at the ball's centre returned #arrTools, so the first event
+   of every chart could not be clicked or dragged. */
+/* Measured at 1440, not the suite's 1500: the header wraps at 1440 and that is
+   where the buttons were seen sliding out from under the pointer. Visible
+   controls only — Fit and Reset are always in the DOM, merely display:none, so
+   counting every node would make this check unfailable. */
+await pg.setViewportSize({ width: 1440, height: 900 });
+await pg.waitForTimeout(300);
+const headerShape = () => pg.evaluate(() => ({
+  ids: [...document.querySelectorAll('header .controls button, header .controls select')]
+    .filter(e => e.getBoundingClientRect().width > 0).map(e => e.id).join(','),
+  markingTop: Math.round(document.getElementById('activeSel').getBoundingClientRect().top),
+  rows: new Set([...document.querySelectorAll('header .controls button, header .controls select')]
+    .filter(e => e.getBoundingClientRect().width > 0)
+    .map(e => Math.round(e.getBoundingClientRect().top))).size,
+}));
+const headerBefore = await headerShape();
+await pg.click('#arrangeBtn');
+await pg.waitForTimeout(400);
+/* Fit first: earlier checks leave the chart panned somewhere arbitrary, and Fit
+   is the one deterministic view. It also spreads events across the whole board,
+   which is what puts some of them under a floating toolbar. */
+await pg.click('#fitBtn');
+await pg.waitForTimeout(400);
+const editGeom = await pg.evaluate(() => {
+  /* Scroll home first. The fault is that the toolbar sits over the top-left of
+     the board, so it only bites when the board is at its origin — which is where
+     it is every time the app loads. Measuring wherever an earlier check left the
+     scroll would make this pass or fail by luck. */
+  const bd = document.getElementById('board');
+  bd.scrollTop = 0; bd.scrollLeft = 0;
+  const t = document.getElementById('arrTools');
+  const board = document.getElementById('board').getBoundingClientRect();
+  const ball = document.querySelector('#flowSvg .ball[data-id="ST-01"]');
+  const out = { toolbar: !!t, hit: null, overlapsBoard: null };
+  if (t) {
+    const r = t.getBoundingClientRect();
+    out.overlapsBoard = r.left < board.right && r.right > board.left
+      && r.top < board.bottom && r.bottom > board.top;
+  }
+  if (ball) {
+    const r = ball.getBoundingClientRect();
+    const el = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    out.hit = el ? (el.closest('#arrTools') ? '#arrTools' : (el.closest('#flowSvg') ? '#flowSvg' : 'other')) : 'none';
+  }
+  /* Stated as geometry, not as "is ST-01 reachable": which event sits under the
+     toolbar depends on the pan and the syllabus an earlier check left behind, so
+     naming one is a coin toss. A strip that ends above the board can never bury
+     anything, whatever the chart is doing. */
+  if (t) out.gapToBoard = Math.round(board.top - t.getBoundingClientRect().bottom);
+  return out;
+});
+const headerAfter = await headerShape();
+ok('the edit toolbar never overlaps the board', editGeom.toolbar && editGeom.overlapsBoard === false);
+ok('the edit toolbar ends above the board, so it can bury no event',
+  editGeom.gapToBoard >= 0, `${editGeom.gapToBoard}px between the strip and the board`);
+ok('turning edit mode on does not add or remove header buttons',
+  headerBefore.ids === headerAfter.ids,
+  headerBefore.ids === headerAfter.ids ? '' : `${headerBefore.ids} -> ${headerAfter.ids}`);
+/* Deliberately no assertion on where "Marking as" lands: whether it wraps
+   depends on how long the course and syllabus names happen to be, so it passes
+   or fails by luck. Holding the visible control list identical is the same fault
+   measured at its root, and that is deterministic. */
+
+/* Fit and Reset layout moved out of the header; they must still be reachable. */
+ok('Fit is reachable while editing', await pg.locator('#fitBtn:visible').count() === 1);
+ok('Reset layout is reachable while editing', await pg.locator('#resetLayout:visible').count() === 1);
+ok('Fit and Reset layout live in the edit strip, not the header',
+  await pg.locator('header #fitViewBtn').count() === 0
+  && await pg.locator('header #resetLayout').count() === 0);
+
+/* ST-01 must actually move, not merely be hittable. */
+const st01Drag = await (async () => {
+  const at = () => pg.evaluate(() => {
+    const r = document.querySelector('#flowSvg .ball[data-id="ST-01"]').getBoundingClientRect();
+    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+  });
+  const before = await at();
+  await pg.mouse.move(before.x, before.y);
+  await pg.mouse.down();
+  await pg.mouse.move(before.x + 70, before.y + 45, { steps: 12 });
+  await pg.mouse.up();
+  await pg.waitForTimeout(300);
+  const after = await at();
+  return { dx: after.x - before.x, dy: after.y - before.y };
+})();
+ok('ST-01 can actually be dragged in edit mode',
+  Math.abs(st01Drag.dx - 70) < 12 && Math.abs(st01Drag.dy - 45) < 12,
+  `moved ${st01Drag.dx},${st01Drag.dy} of 70,45`);
+await pg.click('#undoBtn').catch(() => {});
+await pg.waitForTimeout(200);
+await pg.click('#arrangeBtn');
+await pg.waitForTimeout(300);
+await pg.setViewportSize({ width: 1500, height: 950 });
+await pg.waitForTimeout(300);
+
+/* Two identical-looking zoom controls, one per side, with nothing to tell them
+   apart. Assert the words, not the styling. */
+const zoomLabels = await pg.evaluate(() => ({
+  flow: (document.getElementById('flowZoomCtl') || {}).textContent || '',
+  side: (document.getElementById('sideZoomCtl') || {}).textContent || '',
+}));
+ok('the chart zoom control says which side it zooms', /chart/i.test(zoomLabels.flow),
+  JSON.stringify(zoomLabels.flow));
+ok('the panel zoom control says which side it zooms', /panel/i.test(zoomLabels.side),
+  JSON.stringify(zoomLabels.side));
+
 ok('no uncaught page errors', errs.length === 0, errs.slice(0, 2).join(' | '));
 ok('no unexpected failed requests', bad4xx.length === 0, [...new Set(bad4xx)].slice(0, 3).join(' | '));
 

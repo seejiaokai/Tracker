@@ -21,9 +21,10 @@ export default function Header() {
         <button className="sm" id="addCourse" onClick={core.addCourse}>+ Course</button>
         <button className="sm" id="renCourse" title="Rename the current course" onClick={core.renCourse}>Rename</button>
         <button className="sm" id="delCourse" title="Delete the current course" onClick={core.delCourse}>Del Course</button>
+        {/* Fit and Reset layout live in the edit strip, not here: appearing only
+            in edit mode, they used to shove Marking as onto the next row and slide
+            every button out from under the pointer. */}
         <button className={'sm' + (core.arrangeMode ? ' primary' : '')} id="arrangeBtn" onClick={core.toggleArrange}>{core.arrangeMode ? '✓ Done' : '✎ Edit'}</button>
-        <button className="sm" id="fitViewBtn" style={{ display: core.arrangeMode ? '' : 'none' }} title="Zoom to fit the whole chart" onClick={core.fitViewClick}>Fit</button>
-        <button className="sm" id="resetLayout" style={{ display: core.arrangeMode ? '' : 'none' }} onClick={core.resetLayoutClick}>Reset layout</button>
         <button className={'sm' + ((core.sylDirty || core.fileDirty) ? ' dirty' : '')} id="saveChanges" title="Save your work — the syllabus, and your file if one is open" onClick={core.saveChangesClick}>{(core.sylDirty || core.fileDirty) ? '✓ Save changes ●' : '✓ Save changes'}</button>
         <label className="sub" style={{ marginLeft: 8 }}>Syllabus{' '}
           <select id="sylSel" value={sylValue} onChange={e => core.switchSyllabus(e.target.value)}>

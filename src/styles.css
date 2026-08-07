@@ -5,7 +5,16 @@
  --orange:#ff9800;--red:#ff2b2b;--grey:#5a6172;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:13.5px/1.45 "Segoe UI",Roboto,Arial,sans-serif}
+/* Column flex so the board absorbs whatever the header and the edit strip
+   actually take. The old .layout{height:calc(100vh - 86px)} was already wrong —
+   the header measures 135px at 1440 — and a docked edit strip breaks it outright. */
+/* height, not min-height: with min-height the column grows to fit the board's
+   own 10,000px of chart and the whole page scrolls instead of the board.
+   dvh so a phone's collapsing address bar does not cut the bottom off. */
+body{margin:0;background:var(--bg);color:var(--ink);font:13.5px/1.45 "Segoe UI",Roboto,Arial,sans-serif;height:100vh;height:100dvh;overflow:hidden}
+/* The column has to live on #root: React mounts the header, the edit strip and
+   the layout inside it, so a flex column on body would only ever lay out #root. */
+#root{display:flex;flex-direction:column;height:100%;min-height:0}
 .restricted{background:#7a1414;color:#fff;text-align:center;font-weight:700;letter-spacing:3px;font-size:11px;padding:3px}
 header{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 header h1{font-size:16px;margin:0;letter-spacing:.5px}
@@ -16,7 +25,10 @@ button{cursor:pointer}button:hover{border-color:var(--accent)}
 button.primary{background:#16384a;border-color:var(--accent)}
 button.sm{padding:3px 7px;font-size:11px}
 :root{--sideW:350px}
-.layout{display:grid;grid-template-columns:minmax(0,1fr) 6px var(--sideW);height:calc(100vh - 86px)}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 6px var(--sideW);flex:1;min-height:0}
+/* Grid items default to min-height:auto, which lets the board's chart push the
+   row taller than the viewport rather than scrolling inside it. */
+.board,.side{min-height:0}
 .resizer{background:var(--line);cursor:col-resize}.resizer:hover{background:var(--accent)}
 .viewtabs{display:none;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:35}
 .viewtabs button{flex:1;padding:8px;font-size:13px}
@@ -74,6 +86,9 @@ button.sm{padding:3px 7px;font-size:11px}
 #sideZoomCtl button{padding:2px 8px;font-size:14px;line-height:1.2;min-width:26px}
 #sideZoomCtl #szReset{font-size:11px;min-width:0}
 #sideZoomCtl #szPct{font-size:11.5px;color:var(--muted);min-width:38px;text-align:center}
+/* The two controls were pixel-identical; only their screen corner said which
+   half of the app they zoomed. */
+.zoomwho{font-size:10px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);padding-right:2px}
 @media(max-width:1050px){ body.tab-flow #sideZoomCtl{display:none} #sideZoomCtl{right:50%;transform:translateX(50%)} }
 #flowZoomCtl{position:fixed;z-index:60;left:14px;bottom:14px;display:flex;gap:4px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:4px 6px;box-shadow:0 4px 14px rgba(0,0,0,.45)}
 #flowZoomCtl button{padding:2px 8px;font-size:14px;line-height:1.2;min-width:26px}
@@ -107,7 +122,9 @@ svg.perf .edgehit{pointer-events:none}
 .flowwrap{min-width:max-content}
 #flowSvg.arrange .ball{cursor:grab}#flowSvg.arrange .ball:active{cursor:grabbing}
 .numbadge{font:700 9px Arial;fill:#fff}.numbg{fill:#11141a;stroke:#5a6172;stroke-width:0.8}
-.arrhint{position:fixed;left:50%;top:96px;transform:translateX(-50%);background:#16384a;border:1px solid var(--accent);color:#dff;padding:5px 12px;border-radius:20px;font-size:12px;z-index:40;display:none}
+/* Docked for the same reason as .arrtools — it floated at top:96px, over the
+   header at any width where the header wraps past that. */
+.arrhint{background:#16384a;border-bottom:1px solid var(--accent);color:#dff;padding:4px 12px;font-size:12px;display:none;text-align:center}
 .arrhint.on{display:block}
 .savestat{font-size:11px;color:#8a93a3;margin-left:6px;white-space:nowrap}
 .savestat.ok{color:#39d353}.savestat.saving{color:#ffb84d}.savestat.err{color:#ff6b6b}
@@ -123,7 +140,15 @@ svg.perf .edgehit{pointer-events:none}
 .big{display:flex;gap:8px;flex-wrap:wrap}.big .num{flex:1;min-width:60px;text-align:center;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:7px}
 .big .num .v{font-size:20px;font-weight:700}.big .num .l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
 .flexbar{padding:8px 10px;border-radius:8px;font-weight:700;color:#fff;text-align:center;font-size:13px}
-.opt2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.opt2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+/* Three date boxes across needed 419px in a 301px panel, putting End date B 84px
+   off the right of the window. Set pace takes the full width; the two end dates
+   share the row below, where each has room for a whole dd/mm/yyyy. */
+.paceGrid>.o:first-child{grid-column:1/-1}
+.paceGrid .o{padding:8px}
+.paceGrid input[type=date]{width:100%;min-width:0;padding:6px 4px}
+.paceRow{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.paceRow .r{font-size:17px;font-weight:700;line-height:1.15}
 .opt2 .o{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:9px}
 .opt2 .o .t{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
 .opt2 .o .r{font-size:17px;font-weight:700}
@@ -149,7 +174,11 @@ svg.perf .edgehit{pointer-events:none}
 .mini{font-size:11px;color:var(--muted)}
 .field{display:flex;gap:7px;align-items:center;margin:5px 0}.field label{min-width:120px;color:var(--muted);font-size:12px}
 small.hint{color:var(--muted);font-size:11px}
-.arrtools{position:fixed;left:50%;top:128px;transform:translateX(-50%);z-index:41;display:none;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:6px 8px;flex-wrap:wrap;justify-content:center;max-width:94vw;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+/* Docked, not floating. It used to be position:fixed over the board at
+   (360,128) — 720x139 — which put it on top of the first event of every chart:
+   elementFromPoint at ST-01 returned the toolbar, so ST-01 could not be clicked
+   or dragged at all. In normal flow it pushes the board down instead. */
+.arrtools{display:none;gap:6px;background:var(--panel2);border-bottom:1px solid var(--line);padding:6px 10px;flex-wrap:wrap;justify-content:center;align-items:center}
 .arrtools.on{display:flex}
 .arrtools .sep{width:1px;background:var(--line);margin:0 2px}
 .edgehit{cursor:pointer}.edgehit:hover{stroke:rgba(54,194,255,.25)!important}

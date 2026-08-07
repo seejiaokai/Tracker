@@ -44,6 +44,10 @@ export default function ArrangeTools() {
       <button id="undoBtn" title="Undo last flow edit" onClick={core.doUndo}>↶ Undo</button>
       <button id="redoBtn" title="Redo" onClick={core.doRedo}>↷ Redo</button>
       <button id="fitBtn" title="Fit the whole flow in view" onClick={core.fitView}>⤢ Fit</button>
+      {/* Moved out of the header, where showing up only in edit mode pushed
+          Marking as onto another row and slid the buttons under the pointer.
+          The header's #fitViewBtn was a duplicate of #fitBtn and is gone. */}
+      <button id="resetLayout" title="Put every event back where the chart says it goes" onClick={core.resetLayoutClick}>↺ Reset layout</button>
       <span className="sep"></span>
       <button id="editSyl" title="Open the full event list to edit names, types, crew and prerequisites" onClick={core.openModal}>📋 Edit events</button>
       <div className="arrnote">Double-click any pokéball on the chart to edit that event directly.</div>

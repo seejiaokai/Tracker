@@ -165,22 +165,29 @@ export default function SidePanel({ zoom }) {
       </div>
       <div className="card">
         <h3>Pace &amp; expected end</h3>
-        <div className="opt2" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+        {/* Set pace takes the whole width; the two end dates share the row below.
+            Three across needed 419px in a 301px panel and pushed End date B off
+            the right edge of the window. */}
+        <div className="opt2 paceGrid">
           <div className="o">
             <div className="t">Set pace</div>
-            <div className="field" style={{ margin: 0 }}>
-              <input type="number" step="0.1" min="0.5" id="epwIn" value={epw} style={{ width: 52 }} onChange={e => core.setEpw(e.target.value)} /> <span className="mini">/wk</span>
+            <div className="paceRow">
+              <div className="field" style={{ margin: 0 }}>
+                <input type="number" step="0.1" min="0.5" id="epwIn" value={epw} style={{ width: 52 }} onChange={e => core.setEpw(e.target.value)} /> <span className="mini">/wk</span>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div className="r">{projEnd}</div><div className="mini">projected end</div>
+              </div>
             </div>
-            <div className="r" style={{ marginTop: 6 }}>{projEnd}</div><div className="mini">projected end</div>
           </div>
           <div className="o">
             <div className="t">End date A</div>
-            <input type="date" id="targetIn" value={core.plan.target || ''} style={{ width: '100%' }} onChange={e => core.setTarget(e.target.value)} />
+            <input type="date" id="targetIn" value={core.plan.target || ''} onChange={e => core.setTarget(e.target.value)} />
             <div className="r" style={{ marginTop: 6 }}>{reqEpw}{reqEpw !== '—' && reqEpw !== 'past' ? ' /wk' : ''}</div><div className="mini">req. pace</div>
           </div>
           <div className="o">
             <div className="t">End date B</div>
-            <input type="date" id="targetIn2" value={core.plan.target2 || ''} style={{ width: '100%' }} onChange={e => core.setTarget2(e.target.value)} />
+            <input type="date" id="targetIn2" value={core.plan.target2 || ''} onChange={e => core.setTarget2(e.target.value)} />
             <div className="r" style={{ marginTop: 6 }}>{reqEpw2}{reqEpw2 !== '—' && reqEpw2 !== 'past' ? ' /wk' : ''}</div><div className="mini">req. pace</div>
           </div>
         </div>
