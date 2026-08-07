@@ -39,9 +39,19 @@ export async function ensureWritable(handle) {
   } catch (_) { return false; }
 }
 
+/* Writes, then reads the file back and checks it is really the size we wrote.
+   A write that fails part-way, or is silently dropped, otherwise leaves the app
+   reporting success while the file on disk is stale — the worst possible
+   outcome for someone relying on that file as their only copy. */
 export async function writeTo(handle, text) {
   const w = await handle.createWritable();
   await w.write(text); await w.close();
+  if (handle.getFile) {
+    const onDisk = await handle.getFile();
+    const wrote = new Blob([text]).size;
+    if (onDisk.size !== wrote)
+      throw new Error(`the file holds ${onDisk.size} bytes but ${wrote} were written`);
+  }
   return true;
 }
 
