@@ -12,6 +12,13 @@ Take their reports literally; they have never been wrong.
 "Reading the syllabus .docx" section of `CLAUDE.md` before touching either map. Ask the user
 for screenshots of the rendered pages instead.
 
+**When you ask for screenshots, ask for them as file attachments.** Images pasted into the
+chat can be read in the moment but are never written to disk, so they cannot be saved,
+re-cropped, magnified or handed to a subagent — and they are gone for good next time you look.
+The user sent all 22 pages this way; they were readable then and unrecoverable an hour later.
+Only the `.docx` and two early photos ever reached the filesystem. Say this up front, so the
+composited pages can be kept alongside the repo and this whole trap disappears for good.
+
 ## What this session did
 
 `main` and `claude/read-handoff-docs-8imnhp` are level and clean; the chart work below is
