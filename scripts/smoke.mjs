@@ -387,6 +387,33 @@ for (const [name, syl] of Object.entries(SYLLABI)) {
 }
 ok('no new arrows pointing back up the page', backwards.length === 0, backwards.join(' | '));
 
+/* ---- no personal data in a PUBLIC repository ----
+   The starting data shipped with the app once carried real rosters and marks
+   (a full "Save backup" had been baked in), and github.com/seejiaokai/Tracker
+   is public. Nothing here may name a person: the seed must hold no student
+   keys at all, and any demo roster must use obvious placeholders. */
+const { SEED_STATE } = await import('../src/data/seedState.js');
+const seedPeople = Object.keys(SEED_STATE)
+  .filter(k => /:m:|:d:/.test(k) || k.endsWith(':roster'));
+ok('shipped starting data names nobody', seedPeople.length === 0,
+  `${seedPeople.length} student keys: ${seedPeople.slice(0, 3).join(', ')}`);
+
+const { readFileSync } = await import('node:fs');
+const { join } = await import('node:path');
+/* NB: `URL` is a const in this file (the app's address), so no `new URL(...)` here. */
+const REPO = join(import.meta.dirname, '..');
+const PLACEHOLDER = /^(STUDENT [A-Z]|TEST)$/;
+const rosterLeaks = [];
+for (const f of ['src/app/core.js', 'src/data/pristine.html', 'sample-data/OCU_state_sample.json']) {
+  const txt = readFileSync(join(REPO, f), 'utf8');
+  /* every quoted name inside a roster array literal, however it is written */
+  for (const m of txt.matchAll(/roster[^\n]{0,80}?\[((?:\s*['"][^'"]*['"]\s*,?)+)\]/gi))
+    for (const nm of m[1].matchAll(/['"]([^'"]+)['"]/g))
+      if (!PLACEHOLDER.test(nm[1])) rosterLeaks.push(`${f}: ${nm[1]}`);
+}
+ok('demo rosters use placeholder names only', rosterLeaks.length === 0,
+  [...new Set(rosterLeaks)].slice(0, 4).join(' | '));
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 await b.close();
 stopServer();

@@ -243,7 +243,8 @@ async function migrateRosters(c) {
         for (const n of allSylNames()) { const r = await sGet(kRosterFor(c, n)); if (r != null && r !== '') { any = true; break; } }
         if (!any) {
           const h = (plan && plan.sylName) || DEFAULT_SYL_NAME;
-          await sSet(kRosterFor(c, h), JSON.stringify(['LEE J', 'KHONG J']));
+          /* placeholder names only — this repository is public */
+          await sSet(kRosterFor(c, h), JSON.stringify(['STUDENT A', 'STUDENT B']));
         }
       }
       await sSet(kRosterMig(c), '1'); return;
