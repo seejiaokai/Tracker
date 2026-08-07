@@ -414,6 +414,54 @@ for (const f of ['src/app/core.js', 'src/data/pristine.html', 'sample-data/OCU_s
 ok('demo rosters use placeholder names only', rosterLeaks.length === 0,
   [...new Set(rosterLeaks)].slice(0, 4).join(' | '));
 
+/* ---- file format ---- */
+const FF = await import('../src/app/fileFormat.js');
+const envelope = FF.buildFile({ charts: null, students: null, savedAt: '2026-01-01T00:00:00.000Z' });
+ok('envelope names its format and version',
+  envelope.format === 'ocu-tracker' && envelope.version === 1);
+ok('envelope records that it holds nothing',
+  envelope.contains.charts === false && envelope.contains.students === false);
+let ffRejected = false;
+try { FF.readFile({ hello: 'world' }); } catch (_) { ffRejected = true; }
+ok('a file that is not ours is rejected, not half-read', ffRejected);
+
+const CHARTS_FIX = {
+  order: ['2026'],
+  syllabi: { '2026': [{ id: 'ST-01', type: 'acad', prereqs: [], seq: 0 }] },
+  layouts: { '2026': { 'ST-01': { x: 60, y: 60 }, __lines: [{ a: 1 }], __font: { __all: 9 } } },
+  eventInfo: { 'ST-01': { name: 'Squadron Welcome' } },
+};
+const STUDENTS_FIX = {
+  courses: ['26ABSG'],
+  byCourse: { '26ABSG': { plan: { sylName: '2026' }, bySyllabus: { '2026': {
+    roster: ['STUDENT A'], marks: { 'STUDENT A': { 'ST-01': { g: 'dco', f: 2 } } },
+    dates: { 'STUDENT A': { lastSyll: '2026-01-02', lastCurr: null } } } } } },
+};
+const ffBoth = FF.readFile(FF.buildFile({ charts: CHARTS_FIX, students: STUDENTS_FIX, savedAt: 'x' }));
+ok('charts survive the round trip intact', JSON.stringify(ffBoth.charts) === JSON.stringify(CHARTS_FIX));
+ok('students survive the round trip intact', JSON.stringify(ffBoth.students) === JSON.stringify(STUDENTS_FIX));
+
+const chartsOnly = FF.buildFile({ charts: CHARTS_FIX, students: null, savedAt: 'x' });
+ok('charts-only file says so', chartsOnly.contains.students === false);
+ok('charts-only file has no students key', !('students' in chartsOnly));
+ok('charts-only file names nobody', !JSON.stringify(chartsOnly).includes('STUDENT A'));
+ok('a name containing a colon still round-trips', (() => {
+  const odd = { courses: ['A:B'], byCourse: { 'A:B': { plan: {}, bySyllabus: { 'x:y': {
+    roster: ['LEE J: JR'], marks: {}, dates: {} } } } } };
+  return JSON.stringify(FF.readFile(FF.buildFile({ charts: null, students: odd, savedAt: 'x' })).students)
+    === JSON.stringify(odd);
+})());
+
+ok('a charts-only file is named plainly',
+  FF.suggestedFileName({ charts: true, students: false }, '2026-08-07T15:04:05.000Z')
+    === 'OCU-syllabus-2026-08-07.json');
+ok('a file with people in it says so in its name',
+  FF.suggestedFileName({ charts: true, students: true }, '2026-08-07T15:04:05.000Z')
+    === 'OCU-syllabus-WITH-STUDENTS-2026-08-07.json');
+ok('a students-only file also says so',
+  FF.suggestedFileName({ charts: false, students: true }, '2026-08-07T15:04:05.000Z')
+    === 'OCU-syllabus-WITH-STUDENTS-2026-08-07.json');
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 await b.close();
 stopServer();
