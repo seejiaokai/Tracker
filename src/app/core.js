@@ -2481,7 +2481,11 @@ export async function applyStudents(students) {
    chose. To make forgetting hard rather than silent, the Save button carries a
    dot whenever there is unsaved work and closing the tab warns first. */
 export let openFileName = null, openFileHasStudents = false, fileDirty = false, lastSavedAt = null;
-export let saveOpts = { charts: true, students: false };
+/* Both on by default: this file is the owner's working save and their backup,
+   so it should hold everything unless they choose otherwise. The handover case
+   is ⤓ Save a copy, which starts with students OFF — that is where the
+   send-it-to-someone risk lives, not here. */
+export let saveOpts = { charts: true, students: true };
 let fileHandle = null;
 
 export function setSaveOpt(which, on) { saveOpts = { ...saveOpts, [which]: !!on }; notify(); }
@@ -2511,7 +2515,10 @@ export async function openFileClick() {
   fileHandle = picked.handle;
   openFileName = picked.handle.name;
   openFileHasStudents = info.students;
-  saveOpts = { charts: info.charts, students: info.students };
+  /* Turn boxes ON to match the file, never OFF. Downgrading here would mean
+     opening a charts-only file silently drops everyone's marks out of the next
+     save — losing them from the very file being relied on as the backup. */
+  saveOpts = { charts: saveOpts.charts || info.charts, students: saveOpts.students || info.students };
   fileDirty = false;
   setSaveStatus('opened ' + openFileName, 'ok'); notify();
 }

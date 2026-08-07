@@ -190,13 +190,14 @@ ok('this browser can write back into the same file', fsCaps.canWrite === true);
 ok('the page is a secure context, which the file pickers require', fsCaps.secure === true);
 
 /* ---- the Open and Save controls ---- */
+const FFNAME = await import('../src/app/fileFormat.js');
 ok('the Open button exists', await pg.locator('#openFileBtn').count() === 1);
 ok('there is exactly one Save changes button', await pg.locator('#saveChanges').count() === 1
   && await pg.locator('#saveFileBtn').count() === 0);
 ok('the toolbar says when no file is open',
   (await pg.textContent('#openFileName')).includes('no file open'));
 ok('the charts tick-box starts ticked', await pg.isChecked('#optCharts'));
-ok('the students tick-box starts unticked', !(await pg.isChecked('#optStudents')));
+ok('the students tick-box starts ticked', await pg.isChecked('#optStudents'));
 ok('no student-data warning shows with no file open',
   await pg.locator('#fileHasStudents').count() === 0);
 
@@ -268,6 +269,10 @@ const good = await pg.evaluate(async () => {
   const el = document.getElementById('lastSaved');
   return { note: el ? el.textContent : '', bytes: stored.length };
 });
+/* Both boxes on means the file holds people, so its name must say so. */
+ok('with both boxes ticked the suggested name warns about students',
+  FFNAME.suggestedFileName({ charts: true, students: true }, '2026-08-07T00:00:00.000Z')
+    === 'OCU-syllabus-WITH-STUDENTS-2026-08-07.json');
 ok('a real save shows its size and the time on the toolbar',
   /saved \d+ KB at /.test(good.note), `note: "${good.note}"`);
 ok('a real save writes the whole file', good.bytes > 10000, `${good.bytes} bytes`);
