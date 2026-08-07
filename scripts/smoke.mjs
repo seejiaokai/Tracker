@@ -156,6 +156,29 @@ ok('clicking a ball opens the grading popup', await pg.evaluate(() => {
   return !!(p && getComputedStyle(p).display !== 'none' && p.offsetWidth);
 }));
 
+/* ---- reading state out for the user's file ---- */
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+const snapCover = await pg.evaluate(async () => {
+  const t = window.__coreForTests; if (!t) return null;
+  const s = await t.layoutSnapshotFor('2026', t.SYLLABI['2026']);
+  return Object.keys(s).filter(k => !k.startsWith('__')).length;
+});
+ok('layout snapshot covers every event, not only moved ones',
+  snapCover !== null && snapCover > 200, `${snapCover} positions`);
+
+const collected = await pg.evaluate(async () => {
+  const t = window.__coreForTests; if (!t) return null;
+  return { charts: await t.collectCharts(['2026']), students: await t.collectStudents() };
+});
+ok('collected charts carry the syllabus and its layout',
+  !!collected && collected.charts.order[0] === '2026'
+  && collected.charts.syllabi['2026'].length > 200
+  && Object.keys(collected.charts.layouts['2026']).length > 200);
+ok('collected charts name nobody',
+  !!collected && !JSON.stringify(collected.charts).includes('STUDENT '));
+ok('collected students carry the roster',
+  !!collected && JSON.stringify(collected.students).includes('STUDENT '));
+
 ok('no uncaught page errors', errs.length === 0, errs.slice(0, 2).join(' | '));
 ok('no unexpected failed requests', bad4xx.length === 0, [...new Set(bad4xx)].slice(0, 3).join(' | '));
 

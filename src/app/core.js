@@ -11,6 +11,7 @@ import { DEFAULT_LAYOUTS } from '../data/layouts.js';
 import { EVENT_INFO } from '../data/eventInfo.js';
 import { SEED_STATE, SEED_STAMP } from '../data/seedState.js';
 import { storage, flushNow, loadLatest, cloudButtonClick, setCloudSinks, getCloudCache, cloudCfg } from '../sync/cloud.js';
+import * as FMT from './fileFormat.js';
 import PRISTINE_HTML from '../data/pristine.html?raw';
 
 export { SYLLABI, SYL_NAMES, DEFAULT_SYL_NAME, DEFAULT_SYL_ORDER, DEFAULT_LAYOUTS, EVENT_INFO };
@@ -189,6 +190,27 @@ async function snapshotLayout(srcName) {
   if (layout && layout.__derived) out.__derived = JSON.parse(JSON.stringify(layout.__derived));
   return out;
 }
+/* Like snapshotLayout(), but for ANY syllabus: takes the event list rather than
+   reading the live SYL, so a file can carry syllabi that are not on screen. */
+export async function layoutSnapshotFor(name, events) {
+  const out = {};
+  let saved = null;
+  try { const r = await sGet(kLayoutFor(course, name)); if (r) saved = JSON.parse(r); } catch (_) {}
+  const own = DEFAULT_LAYOUTS[name] || null;
+  const live = (name === curSyl() && layout) ? layout : null;
+  const auto = (name === curSyl()) ? computeFlow().pos : {};
+  (events || []).forEach(e => {
+    const p = (live && live[e.id]) || (saved && saved[e.id]) || (own && own[e.id])
+      || auto[e.id] || { x: 60, y: 60 };
+    out[e.id] = { x: p.x, y: p.y };
+  });
+  for (const k of ['__edgeMeta', '__merges', '__unmerges', '__font', '__lines', '__derived']) {
+    const v = (live && live[k]) || (saved && saved[k]) || (own && own[k]);
+    if (v != null) out[k] = JSON.parse(JSON.stringify(v));
+  }
+  return out;
+}
+
 export let CUSTOMS = {};
 /* Built-ins can be renamed and deleted like any other syllabus. */
 export let SYL_HIDDEN = [], SYL_ALIAS = {}, SYL_TOMB = {};
@@ -2359,6 +2381,49 @@ async function reloadFromStore() {
   refreshCourses(); refreshSyl(); refreshActive(); renderBoard(); renderSide();
 }
 
+/* ---------- reading state out, for the user's file ----------
+   Two halves that never mix: charts draw the flow and name nobody; students
+   name and grade people and hold no chart. See
+   docs/superpowers/specs/2026-08-07-syllabus-file-design.md */
+
+/* Charts: everything that draws the flow. Never a person. */
+export async function collectCharts(names) {
+  const list = (names && names.length) ? names : orderedSylNames();
+  const syllabi = {}, layouts = {}, order = [];
+  for (const n of list) {
+    const src = sylSource(n); if (!src) continue;
+    order.push(n);
+    syllabi[n] = JSON.parse(JSON.stringify(src));
+    layouts[n] = await layoutSnapshotFor(n, syllabi[n]);
+  }
+  const ei = JSON.parse(JSON.stringify(EVENT_INFO));
+  for (const k in (eventInfo || {})) ei[k] = Object.assign({}, ei[k] || {}, eventInfo[k]);
+  return { order, syllabi, layouts, eventInfo: ei };
+}
+
+/* Students: everything that names or grades a person. Never a chart. */
+export async function collectStudents() {
+  const byCourse = {};
+  for (const c of COURSES) {
+    const bySyllabus = {};
+    for (const n of orderedSylNames()) {
+      const rRaw = await sGet(kRosterFor(c, n));
+      let roster = []; try { roster = rRaw ? JSON.parse(rRaw) : []; } catch (_) { roster = []; }
+      if (!roster.length) continue;
+      const marks = {}, dates = {};
+      for (const s of roster) {
+        const m = await sGet(kMarksFor(c, n, s)); if (m) { try { marks[s] = JSON.parse(m); } catch (_) {} }
+        const d = await sGet(kDatesFor(c, n, s)); if (d) { try { dates[s] = JSON.parse(d); } catch (_) {} }
+      }
+      bySyllabus[n] = { roster, marks, dates };
+    }
+    let planObj = {};
+    try { const p = await sGet(kPlan(c)); if (p) planObj = JSON.parse(p); } catch (_) {}
+    byCourse[c] = { plan: planObj, bySyllabus };
+  }
+  return { courses: COURSES.slice(), byCourse };
+}
+
 /* ---------- init ---------- */
 export let ready = false;
 const cloudCfgFn = () => { try { return cloudCfg(); } catch (e) { return null; } };
@@ -2377,4 +2442,10 @@ export async function init() {
   await loadCourse(COURSES[0]); await loadEventInfo(); await loadSylOrder();
   ready = true;
   refreshCourses(); refreshSyl(); refreshActive(); renderBoard(); renderSide();
+  /* The board is rendered imperatively and this module exports nothing to the
+     page, so scripts/smoke.mjs has no other way to reach these. */
+  if (typeof window !== 'undefined') {
+    window.__coreForTests = { layoutSnapshotFor, collectCharts, collectStudents, SYLLABI, DEFAULT_LAYOUTS };
+    window.__fileFormatForTests = FMT;
+  }
 }
