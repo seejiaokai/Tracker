@@ -13,7 +13,7 @@
  */
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const PORT = process.env.SMOKE_PORT || 4179;
 const OWN_SERVER = !process.env.APP_URL;
@@ -995,6 +995,48 @@ const wrong = Object.entries(CHART_2026).filter(([id, want]) =>
 ok('2026 prereqs match the course map', wrong.length === 0,
   wrong.map(([id]) => `${id}=[${(by26[id]?.prereqs || []).join(',')}]`).join(' | '));
 
+/* The WHOLE of the 2026 map, all 206 events, transcribed from the user's own
+   screenshots of the rendered document and resolved through the page-join
+   letters. The spot-checks above pin the links that have been misread before;
+   this pins everything else too, so a future edit cannot quietly move one.
+   Naming and the deliberate DAAR/NAAR split are recorded in the JSON itself. */
+const MAP26 = JSON.parse(readFileSync(import.meta.dirname + '/course-map-2026.json', 'utf8'));
+const by26full = Object.fromEntries(SYLLABI['2026'].map(e => [e.id, e]));
+const mapWrong = [], mapMissing = [];
+for (const [id, want] of Object.entries(MAP26.edges)) {
+  const ev = by26full[id];
+  if (!ev) { mapMissing.push(id); continue; }
+  const have = (ev.prereqs || []).slice().sort();
+  if (JSON.stringify(have) !== JSON.stringify([...want].sort()))
+    mapWrong.push(`${id}: map=[${want.join(',')}] app=[${have.join(',')}]`);
+}
+ok('every event on the 2026 map exists in the syllabus', mapMissing.length === 0,
+  mapMissing.slice(0, 6).join(', '));
+ok('every prerequisite on the 2026 map matches the syllabus', mapWrong.length === 0,
+  mapWrong.slice(0, 4).join(' | '));
+/* Events struck through in red on the map must not be in the syllabus at all. */
+const revived = MAP26.struck_on_the_map.filter(id => by26full[id]);
+ok('no event the map strikes through is still in 2026', revived.length === 0, revived.join(', '));
+
+/* The WHOLE of the A/G - A/A map, all ten pages, from the user's screenshots.
+   Its structure genuinely differs from 2026 — surface attack comes BEFORE basic
+   fighting manoeuvres here — so reading one into the other is the standing
+   hazard. Every page of it says the flowchart supersedes the tables. */
+const MAPAG = JSON.parse(readFileSync(import.meta.dirname + '/course-map-agaa-2026.json', 'utf8'));
+const byAGfull = Object.fromEntries(SYLLABI['A/G - A/A 2026'].map(e => [e.id, e]));
+const agWrong = [], agMissing = [];
+for (const [id, want] of Object.entries(MAPAG.edges)) {
+  const ev = byAGfull[id];
+  if (!ev) { agMissing.push(id); continue; }
+  const have = (ev.prereqs || []).slice().sort();
+  if (JSON.stringify(have) !== JSON.stringify([...want].sort()))
+    agWrong.push(`${id}: map=[${want.join(',')}] app=[${have.join(',')}]`);
+}
+ok('every event on the A/G - A/A map exists in that syllabus', agMissing.length === 0,
+  agMissing.slice(0, 6).join(', '));
+ok('every prerequisite on the A/G - A/A map matches that syllabus', agWrong.length === 0,
+  agWrong.slice(0, 6).join(' | '));
+
 /* A/G - A/A has its OWN ten-page map (images 20-29). Reading it into 2026 by
    mistake is what broke that chart, so these pin the pairs the map draws in an
    order the app had reversed, plus the page B-32 tail that was never entered. */
@@ -1161,7 +1203,6 @@ const seedPeople = Object.keys(SEED_STATE)
 ok('shipped starting data names nobody', seedPeople.length === 0,
   `${seedPeople.length} student keys: ${seedPeople.slice(0, 3).join(', ')}`);
 
-const { readFileSync } = await import('node:fs');
 const { join } = await import('node:path');
 /* NB: `URL` is a const in this file (the app's address), so no `new URL(...)` here. */
 const REPO = join(import.meta.dirname, '..');
