@@ -21,7 +21,7 @@ date may enter it. Two smoke checks enforce this.
 
 ## Where things stand
 
-`main` and `claude/read-handoff-tyugyx` are level. `npm run smoke` is **131 checks, green**.
+`main` and `claude/read-handoff-tyugyx` are level. `npm run smoke` is **139 checks, green**.
 All five interface packages are merged and verified live except the last, which was still
 publishing at handoff — **run `npm run live` and look at the screenshot before anything else.**
 
@@ -44,6 +44,39 @@ publishing at handoff — **run `npm run live` and look at the screenshot before
   not claim work the user has not done.
 - **Clicking an event on a syllabus with no students crashed the page** —
   `marks[null][id]`. Grading is a no-op with no students now.
+
+## The course maps — checked against the user's own screenshots
+
+They supplied 22 screenshots of the rendered Annex B (`IMG_3257`–`3278`). Both maps are
+now transcribed in full and pinned:
+
+| File | What it holds |
+|---|---|
+| `scripts/course-map-2026.json` | The DEFAULT map, B-11…B-22, 205 events |
+| `scripts/course-map-agaa-2026.json` | The A/G – A/A map, B-23…B-32, 205 events |
+
+**2026 was already correct** — not one link differs from the drawing. The only gaps are
+naming (`AVI-12A/B`, `IEPE`, `NTR(S)-1 + IPC(W)`) and the DAAR/NAAR split the user asked
+for. **A/G – A/A** matches too, apart from four links the syllabus keeps and the drawing
+does not; all four were previously confirmed by the user and are pinned.
+
+**Tx 2026 was badly broken and is repaired** — 19 links restored, including the whole
+`AAM-06…AAM-10` chain, which had no prerequisites at all, and the `SA(S)` sim chain.
+
+### If you re-read these maps, know this first
+
+- **Two readings looked like real corrections and were not.** `INT(S)-2` appeared to gain
+  `AAS-04` on an arrowhead that, at 22×, stops in white space ~16px short of the J wire —
+  it hops J and feeds only K. And `SA(S)-3`/`SA(S)-5`/`DAAR` appeared to lose links, which
+  is what every independent reading concludes and exactly what `AGAA_SIM_CHAIN` and
+  `AGAA_ADDED` exist to overrule. **The user confirmed that chain twice.** Do not "fix" it.
+- The resolver, brief and page transcriptions are in the session scratchpad, not the repo.
+  The method that worked: one agent per page, letters transcribed as nodes, then resolve
+  the chains; then diff against the app and only zoom into the differences.
+- `Tx` has no flow chart. Its tables govern, and the document's own policy line —
+  *"Both Long and Short Conversion course will undergo the same academics requirement"* —
+  is what the new academics check derives from. Hours corroborate: 231.5 academic on both
+  tracks, 74.5 vs 71 device, 39 vs 31 sorties (and the tables list exactly 39 and 31).
 
 ## Still open, and what to ask
 
@@ -73,6 +106,15 @@ marking, so the app looked like it had nothing to save when it did.
   it is small — ask whether they would rather it moved below the calendar.
 - Switching student scrolls to their last mark but does **not** switch syllabus. Switching
   under them would be a surprise and would prompt about unsaved flow edits.
+- **Tx: `TI-1` and `TI-2` now gate nothing.** The events that consumed them (`TI-3`,
+  `DCA-1`) are cut from the short course, and its own table hangs `SA-1` off `DCA-1`.
+  Nothing unlocks early — the TI sorties just lead nowhere. Bridging `SA-1` to `TI-2` is
+  the obvious fix but it is their syllabus decision.
+- **Tx is missing `DAAR` and `NAAR`.** The document's Tx tables list 31 sorties including
+  both; the app has 29. Adding them needs layout positions too.
+- **Tx `SA-1`, `SAT-1`, `SA(S)-1`, `NTR(S)-1`, `SA-5`** still differ from 2026 in ways that
+  are defensible either way — each involves an event the short course cuts. Listed with
+  evidence in the final report of that session.
 
 ## The traps
 
@@ -112,5 +154,5 @@ the reload problem.
 
 ## Testing
 
-`npm run smoke` — 131 checks, must be green before every commit touching `src/`.
+`npm run smoke` — 139 checks, must be green before every commit touching `src/`.
 `npm run live` — the deployed site, after the Pages run finishes. Never call a branch "live".
