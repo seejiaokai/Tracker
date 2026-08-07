@@ -125,3 +125,22 @@ A `403` on `CONNECT` instead means the environment's network policy no longer al
 
 Work on the branch named in the session prompt, never commit straight to `main`
 unless asked. `npm run build` must pass. There is no linter configured.
+
+Per change, in order:
+
+1. **`npm run live` first**, before touching anything, whenever the user reports a
+   bug — reproduce it on the thing they are actually looking at. Their reports have
+   always been accurate; confirm *what* is wrong before guessing why.
+2. Make the change. Port it to `src/data/pristine.html` if it touches `core.js`.
+3. `npm run smoke` — must be green, and extend it so it would have caught this bug.
+   Prove the new check fails without the fix.
+4. Commit and push to the session branch.
+5. `node scripts/build-standalone.mjs` → `SendUserFile` if the user needs to *see* a
+   chart change. This is the only way they can review one before it ships.
+6. After it reaches `main` and the Pages run finishes: **`npm run live` again** to
+   confirm the fix is really live, and look at the screenshot.
+
+**Step 6 cannot happen on a branch.** The deployed site is built from `main` only, so
+between steps 4 and 6 the live site still shows the old behaviour — that is expected,
+not a failed fix. Do not describe a branch change as "live", and do not push to `main`
+to make step 6 possible. Wait for the merge, or say plainly that it is still pending.
