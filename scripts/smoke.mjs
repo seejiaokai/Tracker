@@ -179,6 +179,16 @@ ok('collected charts name nobody',
 ok('collected students carry the roster',
   !!collected && JSON.stringify(collected.students).includes('STUDENT '));
 
+/* ---- reaching the user's own files ---- */
+const fsCaps = await pg.evaluate(() => ({
+  hasModule: !!window.__fileStoreForTests,
+  canWrite: window.__fileStoreForTests ? window.__fileStoreForTests.canWriteInPlace() : null,
+  secure: window.isSecureContext,
+}));
+ok('the file-access wrapper is reachable', fsCaps.hasModule);
+ok('this browser can write back into the same file', fsCaps.canWrite === true);
+ok('the page is a secure context, which the file pickers require', fsCaps.secure === true);
+
 /* ---- writing charts back never disturbs people ---- */
 const applied = await pg.evaluate(async () => {
   const t = window.__coreForTests; if (!t) return null;

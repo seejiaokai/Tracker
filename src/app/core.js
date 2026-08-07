@@ -12,6 +12,7 @@ import { EVENT_INFO } from '../data/eventInfo.js';
 import { SEED_STATE, SEED_STAMP } from '../data/seedState.js';
 import { storage, flushNow, loadLatest, cloudButtonClick, setCloudSinks, getCloudCache, cloudCfg } from '../sync/cloud.js';
 import * as FMT from './fileFormat.js';
+import * as FS from './fileStore.js';
 import PRISTINE_HTML from '../data/pristine.html?raw';
 
 export { SYLLABI, SYL_NAMES, DEFAULT_SYL_NAME, DEFAULT_SYL_ORDER, DEFAULT_LAYOUTS, EVENT_INFO };
@@ -2499,5 +2500,6 @@ export async function init() {
     window.__coreForTests = { layoutSnapshotFor, collectCharts, collectStudents,
       applyCharts, applyStudents, SYLLABI, DEFAULT_LAYOUTS };
     window.__fileFormatForTests = FMT;
+    window.__fileStoreForTests = FS;
   }
 }
