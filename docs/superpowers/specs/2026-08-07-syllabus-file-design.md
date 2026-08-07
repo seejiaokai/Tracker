@@ -7,11 +7,12 @@
 Today your charts are written into the app's own code, and your work is kept in
 your browser's memory. Both of those are wrong for what you're doing.
 
-After this, **one file on your computer holds your syllabus work**. You open it,
-you edit, you save. The app itself ships empty. That single change solves four
-things at once: your work is safe outside the browser, handing a clean app to the
-engineers needs no cleanup, sending me the latest chart is the same act as saving
-it, and the file is what goes into the database later.
+After this, **one file on your computer holds your work** — charts, and student
+data too if you tick that box. You open it, you edit, you save. The app itself
+ships empty. That single change solves four things at once: your work is safe
+outside the browser, handing a clean app to the engineers needs no cleanup,
+sending me the latest chart is the same act as saving it, and the file is what
+goes into the database later.
 
 ## Why the charts must leave the code
 
@@ -35,17 +36,18 @@ nothing. Handover is clean because there was never anything to clean.
 | **⊕ Import syllabus** | Takes one syllabus out of another file and drops it into what you already have — for when a new syllabus is issued. Asks whether to add it as new or replace an existing one. |
 | **⤓ Save a copy** | Saves a separate copy somewhere else. Tick which syllabi to include. For sending me a single chart, or keeping a snapshot. |
 
-**💾 Save backup** and **⤒ Load backup** stay exactly as they are — the
-everything-included pair, students and marks included.
+**Four buttons go.** ☁ Cloud and ⟳ Load latest, because nobody is using the
+sync — the machinery underneath stays untouched, since it is how all saving
+works, so engineers can still build on it later. 💾 Save backup and ⤒ Load
+backup, because the one file now covers what they did.
 
-**⤓ Save as new HTML goes.** It exists only to produce a standalone copy of the
-app, and a second complete duplicate of the app is kept in the project purely to
-feed it. That duplicate has drifted out of step before and once carried a
+**⤓ Save as new HTML also goes.** It exists only to produce a standalone copy of
+the app, and a second complete duplicate of the app is kept in the project purely
+to feed it. That duplicate has drifted out of step before and once carried a
 security hole fixed in one copy but not the other. Removing the button lets the
 whole duplicate go.
 
-**☁ Cloud and ⟳ Load latest are left alone** — still unknown whether a colleague
-depends on the sync. Decide separately.
+Net effect: five buttons removed, four added.
 
 ## How saving works
 
@@ -70,18 +72,34 @@ rather than failing quietly.
 **Tip:** save your file into a OneDrive or SharePoint folder and you get
 automatic backup and version history without us building anything.
 
-## What's in the file
+## What's in the file — you choose
 
-Everything that makes up a chart:
+Two tick-boxes, set when you save:
 
-- every event — its code, name, type, hours and crew
-- every connection between events
-- the position of every ball, not only the ones you have moved
-- your drawn lines, arrowheads, merges and font sizes
+**Charts** — every event with its code, name, type, hours and crew; every
+connection; the position of every ball, not only the ones you have moved; your
+drawn lines, arrowheads, merges and font sizes.
 
-**Nothing that names a person.** No students, no marks, no dates. The file is
-safe to send to me, to the engineers, or anywhere else, by construction rather
-than by remembering to check.
+**Students and courses** — students, courses, marks, failures and dates.
+
+Tick either or both. Charts alone is the safe thing to send anywhere. Both
+together is a complete backup of everything you have.
+
+### Making the risky case visible
+
+Once student data *can* go into the file, it can go into a file you then send me.
+That risk was raised and the tick-box approach chosen anyway, so the job is to
+put the risk where it can be seen rather than to prevent it:
+
+- the file records what is inside it, and the app reads that back
+- the toolbar shows plainly when the open file contains student data
+- a file containing people gets a name that says so, visible in File Explorer
+  and when attaching it to a message
+- on **⤓ Save a copy**, the students tick-box is **off by default** — the
+  handover case starts clean and you have to opt in
+
+None of this stops you sending student data. It stops you doing it *without
+noticing*, which is the failure that actually happens.
 
 ## Dropping in a new syllabus
 
@@ -128,26 +146,17 @@ we follow, not machinery — machinery here would cost more than it saves.
 
 - a chart saved, closed and reopened comes back identical: every ball, every
   line, every arrowhead, every font size
+- the same for students and marks when that box is ticked
 - importing one syllabus leaves all other syllabi, students and marks untouched
-- no student name can reach the file — fake students are planted, and the check
-  fails if any of them appear
+- **with the students box unticked, no student name can reach the file** — fake
+  students are planted and marked, and the check fails if any of them appear
+- **⤓ Save a copy** starts with the students box unticked, every time
+- a file containing student data is reported as such on the toolbar when opened
 - the app starts sensibly with no file open, rather than looking broken
 - declining the browser's write permission is reported plainly, not swallowed
 
 Each check is confirmed to fail before its fix exists. A check that has never
 failed has proven nothing.
-
-## Known gap: your marks are still only in the browser
-
-This design puts your **charts** in a file. Student marks stay in browser memory,
-protected only by 💾 Save backup.
-
-That is the right split for now — you are designing syllabi, not tracking people,
-and keeping the two apart is what makes the chart file safe to send. But you told
-me you don't trust browser memory, and that concern applies to marks just as much
-as to charts.
-
-Not solved here. Worth deciding once the syllabus work settles.
 
 ## Deliberately not doing
 
