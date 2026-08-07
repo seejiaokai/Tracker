@@ -1,110 +1,108 @@
-# Handoff: OCU Progress Tracker — both course maps reconciled, 7 Aug 2026
+# Handoff: OCU Progress Tracker — 7 Aug 2026
 
 ## Read this first
 
-**The user is not a programmer** (see `CLAUDE.md`). Plain language, always.
+**The user is not a programmer** (see `CLAUDE.md`). Plain language, always — in every
+reply, not just summaries.
 
-**Their corrections are the reason this session came out right.** They caught six wrong
-conclusions, and every one exposed a real flaw in the method rather than a one-off slip.
-Take their reports literally; they have never been wrong.
+**Their bug reports have never been wrong.** Reproduce before theorising. Twice this
+session the reported symptom was real and my first explanation was not.
 
-**Do not trust chart pages unzipped from the `.docx`.** This is the big one — see the
-"Reading the syllabus .docx" section of `CLAUDE.md` before touching either map. Ask the user
-for screenshots of the rendered pages instead.
+**Verify by driving the app, not by reading the diff.** Three real faults this session were
+invisible in source review and obvious in a screenshot: two Save buttons side by side, a
+round-trip check that passed while dropping every bit of layout metadata, and the edit
+toolbar sitting on top of the chart.
 
-**When you ask for screenshots, ask for them as file attachments.** Images pasted into the
-chat can be read in the moment but are never written to disk, so they cannot be saved,
-re-cropped, magnified or handed to a subagent — and they are gone for good next time you look.
-The user sent all 22 pages this way; they were readable then and unrecoverable an hour later.
-Only the `.docx` and two early photos ever reached the filesystem. Say this up front, so the
-composited pages can be kept alongside the repo and this whole trap disappears for good.
+**Ask for screenshots as file attachments.** Images pasted into chat can be read once and
+are then gone for good — they never reach disk, so they cannot be re-cropped, magnified or
+handed to a subagent.
 
-## PAUSED — Plan 9 is waiting on the user, 7 Aug 2026
+**The repository is public.** `github.com/seejiaokai/Tracker`. No student name, mark or date
+may enter it. Two smoke checks enforce this; both were confirmed to fail against the old
+data before the fix landed.
 
-The syllabus-file work is built and live **except its last step**. Everything is in
-`docs/superpowers/specs/2026-08-07-syllabus-file-design.md` and the nine plans beside it.
+## Where things stand
 
-Done and on the site: the file format, reading and writing state, file access, 📁 Open,
-✓ Save changes, ⊕ Import syllabus, ⤓ Save a copy, and the removal of five buttons plus
-`pristine.html`. Bundle fell 1,005 kB → 436 kB.
+`main` and `claude/superpowers-install-setup-j6nwrl` are level and clean. Everything below
+is merged and verified live on the Pages site.
 
-**Plan 9 — taking the built-in charts out of `src/data/syllabi.js` — MUST NOT START until
-the user has saved a file, reopened it, and said in their own words that their syllabi are
-inside it.** Any syllabus they have never edited exists *only* in the code Plan 9 deletes.
-No check can stand in for that confirmation; the file is on their machine. If you reach
-Plan 9 without it in the conversation, stop and ask.
+### The syllabus file — Plans 1–8 done, Plan 9 blocked
 
-Proven already, so do not re-litigate it: a file saved by the current app restores every
+Design: `docs/superpowers/specs/2026-08-07-syllabus-file-design.md`
+Plans: `docs/superpowers/plans/2026-08-07-syllabus-file-{1..9}-*.md`
+
+The user's work now lives in a file they keep, not in browser memory. Built and live:
+the file format, reading and writing state, browser file access, **📁 Open**,
+**✓ Save changes**, **⊕ Import syllabus**, **⤓ Save a copy**, and the removal of five
+buttons (Cloud, Load latest, Save backup, Load backup, Save as new HTML) along with
+`src/data/pristine.html`. Bundle fell 1,005 kB → 436 kB.
+
+> ### ⛔ Plan 9 must not start yet
+>
+> Plan 9 empties `src/data/syllabi.js`, `layouts.js` and `eventInfo.js`. **Any syllabus the
+> user has never edited exists only in that code.** It may not be deleted until the user has
+> saved a file, reopened it, and said *in their own words* that their syllabi are inside it.
+>
+> No check can stand in for that — the file is on their machine, not in CI. If you reach
+> Plan 9 without that confirmation in the conversation, **stop and ask.**
+
+Already proven, so do not re-litigate: a file saved by the current app restores every
 syllabus, layout, event name, student and mark into an app whose charts have been deleted
-from the code. That test also found and fixed the crash that used to leave the empty app
-showing one syllabus of five.
+from the code. That test also found and fixed the crash that left the empty app showing one
+syllabus of five.
 
-**Open bug, unresolved.** The user reported a second save appearing to do nothing, and the
-file not holding the second round of changes. It could not be reproduced. Saving now
-verifies the write by reading the file back, reports `NOT SAVED` on any mismatch, and shows
-"saved N KB at HH:MM" beside the file name. If they report it again, that note is the
-evidence — ask whether the time changed.
+### Open bug — unreproduced
 
-## What this session did
+The user reported a second save appearing to do nothing, with the file not holding the
+second round of changes. **It could not be reproduced**, including through the real code
+path with only the OS dialog stubbed.
 
-`main` and `claude/read-handoff-docs-8imnhp` are level and clean; the chart work below is
-merged and **verified live** on the Pages site.
+Rather than guess, the failure was made loud: `writeTo` reads the file back and compares
+sizes, any write failure reports `NOT SAVED` with a reason and keeps the work dirty, and
+the toolbar shows `saved N KB at HH:MM` beside the file name. **If they report it again,
+ask whether that time changed** — that is now the evidence.
 
-| Commit | What |
+A likely innocent explanation was never ruled out: they may have been testing a cached page.
+Tell them to hard-refresh before testing anything newly shipped.
+
+## Interface work — just started, no decisions made
+
+The user asked to rework the interface and then chose to hand off. Nothing was designed and
+nothing was agreed. **Start the brainstorming skill fresh and ask what bothers them** — do
+not assume the list below is the brief.
+
+Three faults found by measurement, worth raising:
+
+| Fault | Detail |
 |---|---|
-| `8762305` | `npm run live` — the deployed site is reachable now; two Chromium settings |
-| `cef1d2b` | Wrote the per-change workflow down, including where the live check fits |
-| `3b7873c` | Removed the abandoned OPS-04 connector drawing an arrow into thin air |
-| `ec565e9` | Stopped the chart claiming ST-03 is needed before AVI-01 |
-| `8f47ad0` | Restored four A/G - A/A links the map draws: TR(S)-1+OPS-03, T-10+AAS-04, TR-5(P)+AAS-04, DAAR+TR-4 |
-| `7f5030d` | Built DAAR-1/-2 and NAAR-1/-2 in 2026, at the user's request |
-| `b14222b` | Pinned the A/G - A/A sim chain |
-| `d6d00fa` | Pinned the seven 2026 links the extracted images get wrong |
+| Edit toolbar covers the chart | `#arrTools` is 720×139 at (360,128) and sits over `ST-01`, the first event |
+| Edit mode reshuffles the header | "Marking as" jumps to row 2, so buttons move out from under the cursor |
+| Two identical zoom controls | `#flowZoomCtl` bottom-left zooms the chart, `#sideZoomCtl` bottom-right zooms the side panel |
 
-**Both maps have now been transcribed twice, end to end.** Beyond those four A/G - A/A links,
-no prerequisite in either syllabus differs from its map. The data is in good shape.
+The toolbar also runs course, syllabus, file and view controls together with nothing
+separating them. 22 controls across two rows at 1440px wide.
 
-## Do not "fix" these
+## Things that will bite you
 
-`scripts/smoke.mjs` pins them, with the reason beside each. All were read wrongly at least
-once from the extracted images, then settled against the user's screenshots:
-
-```
-TR(S)-7  <- TR(S)-LAO      not TR(S)-6   (TR(S)-LAO is drawn grey, missing from the extract)
-INT(S)-1 <- IEPE/IPC …     not EPE       (IEPE sits in the F column, missing from the extract)
-TR-5(P)  <- AAS-04, IEPE/IPC, TR-4
-LASDT-1  <- INT-1, …       not BFM-7     (INT-1 sits between them)
-ACM-3    <- ACM-2, …       not INT-1
-INT-1    <- BFM-7, INT(S)-4  not ACM-2
-T-10     <- AAS-04, IAT-08               (AAS-04 arrives via page-join K from B-14)
-A/G - A/A: SA(S)-2 -> -3 -> -4 -> -5 stays joined — B-28 looks broken but is not
-```
-
-**AVI-13, ST-08, ST-07(P), ST-07(W) are struck through in red** on the 2026 map and are
-deliberately absent from the syllabus. The red X is an overlay, so the extracted pages show
-them as ordinary boxes. Do not add them.
-
-## Known outstanding work
-
-1. **Tx 2026 / Tx 2024 layout**, never approved by the user: arrows that read backwards around
-   `TR-1(P)`, `TR-4` and `EPT-02`, and `TI(S)-2`/`TI(S)-3` so close the arrow is all head.
-   Fixing means moving boxes — ask first. Empty rows are already available.
-2. **Long sweeps**, recorded as baselines, not endorsed: `AAS-04 -> T-10`, `TR-4 -> DAAR` and
-   the DAAR spine. The links are right; the routing is ugly. A layout decision for the user.
-3. `AVI-12` is printed **"AVI-12 A/B"** and `NTR(S)-1` as **"NTR(S)-1 + IPC(W)"** on the maps.
-   Raised, not answered.
+- **Browser file pickers need a live click.** No `await` before `showSaveFilePicker` /
+  `showOpenFilePicker` / `requestPermission`, or the gesture is spent and the call throws.
+  This exact mistake made Save look dead after opening a file.
+- **`setSaveStatus` rewrites every `'ok'` message to a bare "saved".** Success detail must
+  go somewhere else; that is why the save proof sits beside the file name.
+- **A before/after comparison can be worthless.** Two checks passed this session while the
+  thing they guarded was broken, because both sides ran through the same broken code. Assert
+  the value is *present*, not merely unchanged.
+- **Only `applyCharts` may touch charts and only `applyStudents` may touch people.** A smoke
+  check watches every `localStorage` write to hold that line — it is what makes importing a
+  chart safe for marks.
+- **`applyBundle` no longer deletes stored syllabi.** It used to, so a freshly baked
+  standalone HTML would win over saved overrides. That export is gone; restoring the
+  deletion would wipe the user's charts.
 
 ## Testing
 
-`npm run smoke` — **27 checks, all passing.** Every check added this session was proved by
-breaking the fix first and watching it go red. Do the same.
+`npm run smoke` — 85 checks, must be green before every commit touching `src/`.
+`npm run live` — the deployed site, after the Pages run finishes. Never call a branch "live".
 
-`npm run live` — the user asks for the deployed site to be checked after every change. It only
-shows what has finished publishing: smoke → push → wait for the Pages run → live.
-
-## Environment
-
-- `https://seejiaokai.github.io` is reachable. Chromium needs the proxy passed explicitly and
-  `--ssl-version-max=tls1.2`; see `CLAUDE.md`.
-- Pillow: `pip install Pillow`. Composite RGBA pages onto **white**, never `.convert('RGB')`.
-- The scratch directory does **not** survive; the user must re-upload the `.docx`.
+Prove every new check fails before its fix exists. Several checks this session were written,
+passed immediately, and turned out to be measuring nothing.
