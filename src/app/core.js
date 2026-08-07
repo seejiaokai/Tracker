@@ -1555,7 +1555,7 @@ function drawGuides() {
 function endDrag(ev) {
   if (!drag) return; const g = drag.g;
   g.removeEventListener('pointermove', onDrag); g.removeEventListener('pointerup', endDrag); g.removeEventListener('pointercancel', endDrag);
-  const moved = drag.moved; drag = null; alignGuides = []; flushDragPaint(); const gl = document.getElementById('bandLayer'); if (gl) gl.innerHTML = ''; perfOff(); if (moved) { saveLayout(); wireBoard(); }
+  const moved = drag.moved; drag = null; alignGuides = []; flushDragPaint(); const gl = document.getElementById('bandLayer'); if (gl) gl.innerHTML = ''; perfOff(); if (moved) { saveLayout(); markFileDirty(); wireBoard(); }
 }
 
 /* ---------- inline ball editor (text / colour / number) — state for <EditModal/> ---------- */
@@ -1961,7 +1961,7 @@ export async function saveSylText(text) {
 
 /* ---------- arrange mode, editor tools, duplicate & save changes ---------- */
 export let sylDirty = false;
-function markDirty() { sylDirty = true; notify(); }
+function markDirty() { sylDirty = true; markFileDirty(); notify(); }
 function clearDirty() { sylDirty = false; undoStack = []; notify(); }
 
 export async function persistSyl() {
@@ -2476,6 +2476,72 @@ export async function applyStudents(students) {
   return { courses: courses.slice() };
 }
 
+/* ---------- the user's file: Open and Save changes ----------
+   Saving is manual on purpose, so the file always holds a version the user
+   chose. To make forgetting hard rather than silent, the Save button carries a
+   dot whenever there is unsaved work and closing the tab warns first. */
+export let openFileName = null, openFileHasStudents = false, fileDirty = false;
+export let saveOpts = { charts: true, students: false };
+let fileHandle = null;
+
+export function setSaveOpt(which, on) { saveOpts = { ...saveOpts, [which]: !!on }; notify(); }
+/* Called from markDirty() and from endDrag(): dragging a ball saves its own
+   position, so before this it never lit the Save button — an easy way to think
+   work was saved when the file had not been touched. */
+export function markFileDirty() { if (!fileDirty) { fileDirty = true; notify(); } }
+
+async function fileBody(opts, savedAt) {
+  return FMT.buildFile({
+    charts: opts.charts ? await collectCharts(null) : null,
+    students: opts.students ? await collectStudents() : null,
+    savedAt,
+  });
+}
+
+export async function openFileClick() {
+  if (!FS.canWriteInPlace()) { await uiAlert('This browser cannot open a file directly.\n\nUse Chrome or Edge.'); return; }
+  const picked = await FS.pickOpen();          /* no await before this — gesture */
+  if (!picked) return;
+  let obj; try { obj = JSON.parse(picked.text); } catch (_) { await uiAlert('That file is not readable as JSON.'); return; }
+  let info; try { info = FMT.describeFile(obj); } catch (e) { await uiAlert(e.message); return; }
+  const { charts, students } = FMT.readFile(obj);
+  if (charts) await applyCharts(charts, { names: null, mode: 'replace', rename: null });
+  if (students) await applyStudents(students);
+  fileHandle = picked.handle;
+  openFileName = picked.handle.name;
+  openFileHasStudents = info.students;
+  saveOpts = { charts: info.charts, students: info.students };
+  fileDirty = false;
+  setSaveStatus('opened ' + openFileName, 'ok'); notify();
+}
+
+/* One Save button, not two. It saves the syllabus into the browser as it always
+   did, and then writes your file — which is where the work really lives. */
+export async function saveChangesClick() {
+  await persistSyl();
+  await saveToFileClick();
+}
+
+export async function saveToFileClick() {
+  const savedAt = new Date().toISOString();
+  const name = FMT.suggestedFileName(saveOpts, savedAt);
+  if (!fileHandle) {
+    if (!FS.canWriteInPlace()) {
+      FS.downloadInstead(name, JSON.stringify(await fileBody(saveOpts, savedAt), null, 2));
+      setSaveStatus('downloaded a copy — this browser cannot save in place', 'ok');
+      fileDirty = false; notify(); return;
+    }
+    fileHandle = await FS.pickSave(name);      /* gesture-critical */
+    if (!fileHandle) return;
+  }
+  if (!await FS.ensureWritable(fileHandle)) {
+    setSaveStatus('not saved — permission to write your file was declined', 'err'); notify(); return;
+  }
+  await FS.writeTo(fileHandle, JSON.stringify(await fileBody(saveOpts, savedAt), null, 2));
+  openFileName = fileHandle.name; openFileHasStudents = !!saveOpts.students;
+  fileDirty = false; setSaveStatus('saved to ' + openFileName, 'ok'); notify();
+}
+
 /* ---------- init ---------- */
 export let ready = false;
 const cloudCfgFn = () => { try { return cloudCfg(); } catch (e) { return null; } };
@@ -2494,6 +2560,9 @@ export async function init() {
   await loadCourse(COURSES[0]); await loadEventInfo(); await loadSylOrder();
   ready = true;
   refreshCourses(); refreshSyl(); refreshActive(); renderBoard(); renderSide();
+  /* Unsaved work must not vanish quietly when the tab closes. */
+  if (typeof window !== 'undefined')
+    window.addEventListener('beforeunload', e => { if (fileDirty) { e.preventDefault(); e.returnValue = ''; } });
   /* The board is rendered imperatively and this module exports nothing to the
      page, so scripts/smoke.mjs has no other way to reach these. */
   if (typeof window !== 'undefined') {

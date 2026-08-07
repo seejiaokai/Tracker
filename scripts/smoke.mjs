@@ -189,6 +189,17 @@ ok('the file-access wrapper is reachable', fsCaps.hasModule);
 ok('this browser can write back into the same file', fsCaps.canWrite === true);
 ok('the page is a secure context, which the file pickers require', fsCaps.secure === true);
 
+/* ---- the Open and Save controls ---- */
+ok('the Open button exists', await pg.locator('#openFileBtn').count() === 1);
+ok('there is exactly one Save changes button', await pg.locator('#saveChanges').count() === 1
+  && await pg.locator('#saveFileBtn').count() === 0);
+ok('the toolbar says when no file is open',
+  (await pg.textContent('#openFileName')).includes('no file open'));
+ok('the charts tick-box starts ticked', await pg.isChecked('#optCharts'));
+ok('the students tick-box starts unticked', !(await pg.isChecked('#optStudents')));
+ok('no student-data warning shows with no file open',
+  await pg.locator('#fileHasStudents').count() === 0);
+
 /* ---- writing charts back never disturbs people ---- */
 const applied = await pg.evaluate(async () => {
   const t = window.__coreForTests; if (!t) return null;
@@ -233,6 +244,35 @@ const stApplied = await pg.evaluate(async () => {
 ok('applying students writes the roster', !!stApplied && (stApplied.roster || '').includes('STUDENT Z'));
 ok('applying students writes marks and failure counts',
   !!stApplied && (stApplied.marks || '').includes('"f":3'));
+
+/* ---- the whole round trip, minus the OS picker Playwright cannot drive ---- */
+const trip = await pg.evaluate(async () => {
+  const t = window.__coreForTests, F = window.__fileFormatForTests;
+  if (!t || !F) return null;
+  const meta = o => Object.keys(o || {}).filter(k => k.startsWith('__')).sort().join(',');
+  const before = await t.collectCharts(null);
+  const text = JSON.stringify(F.buildFile({ charts: before, students: null, savedAt: 'x' }), null, 2);
+  const { charts } = F.readFile(JSON.parse(text));
+  await t.applyCharts(charts, { names: null, mode: 'replace', rename: null });
+  const after = await t.collectCharts(null);
+  return {
+    identical: JSON.stringify(before) === JSON.stringify(after),
+    names: before.order.join(','),
+    metaBefore: before.order.map(n => meta(before.layouts[n])).join('|'),
+    metaAfter: after.order.map(n => meta(after.layouts[n])).join('|'),
+    hasPeople: text.includes('STUDENT '),
+  };
+});
+ok('a chart survives a full save-and-reopen unchanged',
+  !!trip && trip.identical, trip ? trip.names : 'no result');
+/* Comparing before against after is not enough on its own: both sides run
+   through the same code, so dropping the metadata entirely leaves them equal
+   and the check green. Assert it is actually THERE as well as unchanged. */
+ok('drawn lines, arrowheads and font sizes survive too',
+  !!trip && trip.metaBefore.includes('__edgeMeta') && trip.metaBefore.includes('__lines')
+  && trip.metaBefore === trip.metaAfter,
+  trip ? `${trip.metaBefore} vs ${trip.metaAfter}` : '');
+ok('the saved text names nobody when students are not ticked', !!trip && !trip.hasPeople);
 
 ok('no uncaught page errors', errs.length === 0, errs.slice(0, 2).join(' | '));
 ok('no unexpected failed requests', bad4xx.length === 0, [...new Set(bad4xx)].slice(0, 3).join(' | '));
