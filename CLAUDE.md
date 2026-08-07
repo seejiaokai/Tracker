@@ -159,6 +159,11 @@ are missing and the printed `claude plugin install` command is the fix.
   inside it, so a flex column on `body` lays out `#root` alone and the whole page
   scrolls instead of the board. `#root` needs `min-width:0` too, or the phone's
   scrollable one-row header widens every card.
+- **`styles.css` has two `@media(max-width:1050px)` blocks, one near the top and
+  one at the end.** Phone overrides belong in the *last* one: same specificity
+  means later wins, and the general rules sit between them. This has silently
+  beaten a whole block of phone rules once and a `padding-bottom` once — the
+  second time only the deployed site showed it.
 - Grid columns: always `minmax(0,1fr)`, never `1fr`. A bare `1fr` takes its
   minimum from content, and a `dd/mm/yyyy` box then pushes the panel wider than
   the screen. This has bitten three separate layouts.
