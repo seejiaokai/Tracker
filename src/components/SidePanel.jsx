@@ -1,47 +1,94 @@
 import React, { useEffect, useRef } from 'react';
 import * as core from '../app/core.js';
 
-function Calendar() {
-  const s = core.active;
+/* The calendar that the lull pop-up shows. It used to live in the side panel
+   with a "Click sets" dropdown offering Last Flown (Currency), Last Flown
+   (Syllabus) and Expected end date — all three already had their own boxes in
+   the panel above, and setting a lull meant choosing "Lull start", clicking,
+   choosing "Lull end", clicking. It only sets lull periods now. */
+function LullCalendar() {
+  const pick = core.lullPick;
+  const s = pick.student;
   const calView = core.calView;
   const y = calView.getFullYear(), m = calView.getMonth();
   const first = new Date(y, m, 1); const start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7)); // Mon start
   const today = core.parseD(core.isoToday());
-  const lc = core.dates[s].lastCurr, ls = core.dates[s].lastSyll, tg = core.plan.target, tg2 = core.plan.target2;
-  const lulls = (core.plan.lulls || []).map(l => [core.parseD(l.start), core.parseD(l.end)]).filter(a => a[0] && a[1]);
+  const editing = pick.index >= 0 ? (core.lulls[s] || [])[pick.index] : null;
+  const spans = (core.lulls[s] || [])
+    .filter((l, i) => i !== pick.index)
+    .map(l => [core.parseD(l.start), core.parseD(l.end)]).filter(a => a[0] && a[1]);
   const cells = [];
   for (let i = 0; i < 42; i++) {
     const d = new Date(start.getTime() + i * core.DAY); const iso = core.isoOf(d);
     let cls = 'day'; if (d.getMonth() !== m) cls += ' out';
     if (d.getTime() === today.getTime()) cls += ' today';
     const cols = [];
-    if (iso === lc) cols.push('#203a2a'); if (iso === ls) cols.push('#2a3550');
-    if (iso === tg || iso === tg2) cols.push('#16384a');
-    if (lulls.some(([a, b]) => d >= a && d <= b)) cols.push('#3a3030');
+    if (iso === pick.start) cols.push('#16584a');
+    if (spans.some(([a, b]) => d >= a && d <= b)) cols.push('#3a3030');
     const bg = core.sliceBg(cols);
     cells.push(
-      <div key={iso} className={cls} data-iso={iso} style={bg ? { background: bg } : undefined} onClick={() => core.calDayClick(iso)}>{d.getDate()}</div>
+      <div key={iso} className={cls} data-iso={iso} style={bg ? { background: bg } : undefined}
+        onClick={() => core.lullDayClick(iso)}>{d.getDate()}</div>
     );
   }
   const mn = calView.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   return (
-    <div className="cal">
-      <div className="hd">
-        <button className="sm" id="calPrev" onClick={core.calPrev}>‹</button>
-        <b>{mn}</b>
-        <button className="sm" id="calNext" onClick={core.calNext}>›</button>
+    <>
+      <div className="lullback" onClick={core.closeLullPicker} />
+      <div className="lullcal on" id="lullCal">
+        <div className="lullhd">
+          <b>{editing ? 'Change lull period' : 'Set lull period'} — {s}</b>
+          <button className="sm" id="lullClose" onClick={core.closeLullPicker}>✕</button>
+        </div>
+        <div className="mini" id="lullStep">
+          {pick.start
+            ? <>Start <b>{core.fmt(core.parseD(pick.start))}</b> — now pick the last day.</>
+            : <>Pick the first day of the period.</>}
+        </div>
+        <div className="cal">
+          <div className="hd">
+            <button className="sm" id="lullPrev" onClick={core.calPrev}>‹</button>
+            <b>{mn}</b>
+            <button className="sm" id="lullNext" onClick={core.calNext}>›</button>
+          </div>
+          <div className="grid">
+            {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => <div key={d} className="dow">{d}</div>)}
+            {cells}
+          </div>
+        </div>
+        <div className="mini" style={{ marginTop: 6 }}>Changing month does not pick a day. Escape closes without saving.</div>
       </div>
-      <div className="grid">
-        {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => <div key={d} className="dow">{d}</div>)}
-        {cells}
+    </>
+  );
+}
+
+/* Copy one student's periods onto others. */
+function LullCopy() {
+  const c = core.lullCopy;
+  const others = core.roster.filter(r => r !== c.from);
+  return (
+    <>
+      <div className="lullback" onClick={core.closeLullCopy} />
+      <div className="lullcal on" id="lullCopy">
+        <div className="lullhd">
+          <b>Copy {c.from}’s lull periods to</b>
+          <button className="sm" id="lullCopyClose" onClick={core.closeLullCopy}>✕</button>
+        </div>
+        {others.length
+          ? others.map(r => (
+            <label className="sub lullpick" key={r}>
+              <input type="checkbox" value={r} checked={c.picked.includes(r)}
+                onChange={e => core.toggleLullCopy(r, e.target.checked)} /> {r}
+            </label>
+          ))
+          : <div className="mini">Nobody else on this course yet.</div>}
+        <div className="mini" style={{ marginTop: 6 }}>This replaces their periods with a copy of {c.from}’s.</div>
+        <div className="lullbtns">
+          <button className="sm" onClick={core.closeLullCopy}>Cancel</button>
+          <button className="sm primary" id="lullCopyOk" disabled={!c.picked.length} onClick={core.applyLullCopy}>Copy</button>
+        </div>
       </div>
-      <div className="mini" style={{ marginTop: 5 }}>
-        <i className="sw" style={{ background: '#203a2a' }}></i>Curr{' '}
-        <i className="sw" style={{ background: '#2a3550' }}></i>Syll{' '}
-        <i className="sw" style={{ background: '#16384a' }}></i>End{' '}
-        <i className="sw" style={{ background: '#3a3030' }}></i>Lull
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -79,12 +126,12 @@ export default function SidePanel({ zoom }) {
   let projEnd = '—';
   if (rem > 0 && epw > 0) {
     let weeks = rem / epw; let end = new Date(today.getTime() + Math.ceil(weeks * 7) * core.DAY);
-    end = new Date(end.getTime() + Math.ceil(core.lullDaysIn(today.getTime(), end.getTime())) * core.DAY); projEnd = core.fmt(end);
+    end = new Date(end.getTime() + Math.ceil(core.lullDaysIn(s, today.getTime(), end.getTime())) * core.DAY); projEnd = core.fmt(end);
   }
   const tgt = core.parseD(core.plan.target); let reqEpw = '—';
-  if (tgt) { const wk = (core.daysBetween(today, tgt) - core.lullDaysIn(today.getTime(), tgt.getTime())) / 7; reqEpw = wk > 0 ? (rem / wk).toFixed(1) : 'past'; }
+  if (tgt) { const wk = (core.daysBetween(today, tgt) - core.lullDaysIn(s, today.getTime(), tgt.getTime())) / 7; reqEpw = wk > 0 ? (rem / wk).toFixed(1) : 'past'; }
   const tgt2 = core.parseD(core.plan.target2); let reqEpw2 = '—';
-  if (tgt2) { const wk = (core.daysBetween(today, tgt2) - core.lullDaysIn(today.getTime(), tgt2.getTime())) / 7; reqEpw2 = wk > 0 ? (rem / wk).toFixed(1) : 'past'; }
+  if (tgt2) { const wk = (core.daysBetween(today, tgt2) - core.lullDaysIn(s, today.getTime(), tgt2.getTime())) / 7; reqEpw2 = wk > 0 ? (rem / wk).toFixed(1) : 'past'; }
 
   /* plannable now (matches the original inline computation) */
   let fr = 0; core.SYL.forEach(e => { if (core.isDone(s, e.id)) fr = Math.max(fr, core.rowOf(e.id)); });
@@ -198,33 +245,32 @@ export default function SidePanel({ zoom }) {
             <div className="r" style={{ marginTop: 6 }}>{reqEpw2}{reqEpw2 !== '—' && reqEpw2 !== 'past' ? ' /wk' : ''}</div><div className="mini">req. pace</div>
           </div>
         </div>
-        <div className="mini" style={{ marginTop: 6 }}>Baseline 2 events/wk. Both end-date paces exclude lull periods below.</div>
+        <div className="mini" style={{ marginTop: 6 }}>Baseline 2 events/wk. Both end-date paces exclude this student’s lull periods.</div>
       </div>
       <div className="card c-lull">
-        <h3>Lull periods (course)</h3>
+        <h3>Lull periods <span className="who">— {s}</span></h3>
         <div className="chips" id="lullChips">
-          {(core.plan.lulls || []).length
-            ? (core.plan.lulls || []).map((l, i) => (
-              <span key={i} className="chip"><b>{core.fmt(core.parseD(l.start))}</b>→<b>{core.fmt(core.parseD(l.end))}</b> <span className="x" data-lull={i} onClick={() => core.removeLull(i)}>×</span></span>
+          {(core.lulls[s] || []).length
+            ? (core.lulls[s] || []).map((l, i) => (
+              /* Tapping the period reopens the calendar on it — the same
+                 pop-up that made it, so there is one way to set these dates. */
+              <span key={i} className="chip lullchip" title="Tap to change these dates"
+                onClick={() => core.openLullPicker(s, i)}>
+                <b>{core.fmt(core.parseD(l.start))}</b>→<b>{core.fmt(core.parseD(l.end))}</b>
+                <span className="x" data-lull={i}
+                  onClick={e => { e.stopPropagation(); core.removeLull(s, i); }}>×</span>
+              </span>
             ))
             : <span className="mini">none</span>}
         </div>
-        <div className="mini" style={{ marginTop: 6 }}>Use the calendar: set mode to “Lull start”, click a day, then “Lull end”, click a day.</div>
-      </div>
-      <div className="card" id="calCard">
-        <h3>Calendar</h3>
-        <Calendar />
-        <div className="field" style={{ marginTop: 8 }}>
-          <label>Click sets:</label>
-          <select id="calMode" value={core.calMode} onChange={e => core.setCalMode(e.target.value)}>
-            <option value="lastCurr">Last Flown (Currency)</option>
-            <option value="lastSyll">Last Flown (Syllabus)</option>
-            <option value="target">Expected end date</option>
-            <option value="lullStart">Lull start</option>
-            <option value="lullEnd">Lull end</option>
-          </select>
+        <div className="lullbtns">
+          <button className="sm" id="setLullBtn" onClick={() => core.openLullPicker(s, null)}>+ Set lull period</button>
+          <button className="sm" id="copyLullBtn" disabled={core.roster.length < 2}
+            title="Copy these periods onto other students" onClick={() => core.openLullCopy(s)}>⧉ Copy to…</button>
         </div>
       </div>
+      {core.lullPick ? <LullCalendar /> : null}
+      {core.lullCopy ? <LullCopy /> : null}
     </div>
   );
 }

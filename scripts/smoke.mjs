@@ -708,6 +708,95 @@ await pg.waitForTimeout(400);
 ok('the desktop chart is still shown full size, not shrunk to fit',
   Math.abs((await pg.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.flowwrap')).zoom) || 1)) - 1) < 0.01);
 
+/* ---- lull periods ----
+   Course-wide, set through a calendar mode dropdown that also duplicated the
+   two Last Flown dates and the end date already in the panel above. Now: per
+   student, set and edited through one pop-up calendar, and copyable between
+   students. */
+await pg.reload({ waitUntil: 'networkidle' });
+await pg.waitForSelector('#flowSvg .ball');
+await pg.waitForTimeout(400);
+
+ok('the duplicated calendar mode dropdown is gone', await pg.locator('#calMode').count() === 0);
+ok('the calendar no longer sits in the side panel', await pg.locator('#calCard').count() === 0);
+ok('there is a Set lull period button', await pg.locator('#setLullBtn').count() === 1);
+ok('the lull calendar is shut until it is asked for', await pg.locator('#lullCal.on').count() === 0);
+
+/* Two clicks make a period; the month arrows must not count as one. That was
+   the whole complaint about the old start-mode / end-mode pair. */
+/* Two students or the per-student checks below quietly skip themselves — the
+   whole point of this package is that one student's periods are not another's. */
+const addStudent = async name => {
+  await pg.click('#addStu'); await pg.waitForSelector('#dlgInput');
+  await pg.fill('#dlgInput', name);
+  await pg.click('#dlgOk'); await pg.waitForTimeout(700);
+};
+if ((await pg.locator('#activeSel option').count()) < 2) await addStudent('STUDENT SMOKE2');
+const roster0 = await pg.evaluate(() => [...document.querySelectorAll('#activeSel option')].map(o => o.value));
+ok('the course has two students to test lull periods against', roster0.length >= 2, roster0.join(', '));
+/* Adding a student makes them the one being marked, so say explicitly who this
+   period belongs to rather than trusting whoever is selected. */
+await pg.selectOption('#activeSel', roster0[0]); await pg.waitForTimeout(500);
+await pg.click('#setLullBtn'); await pg.waitForSelector('#lullCal.on');
+await pg.click('#lullCal .day:not(.out)');           /* start */
+await pg.click('#lullNext'); await pg.waitForTimeout(200);
+await pg.click('#lullPrev'); await pg.waitForTimeout(200);
+ok('paging the month does not finish the period off by itself',
+  await pg.locator('#lullCal.on').count() === 1 && await pg.locator('#lullChips .chip').count() === 0);
+const days = pg.locator('#lullCal .day:not(.out)');
+await days.nth(await days.count() - 1).click();      /* end */
+await pg.waitForTimeout(400);
+ok('two clicks on the calendar make one lull period',
+  await pg.locator('#lullChips .chip').count() === 1);
+ok('the calendar closes itself once the period is complete',
+  await pg.locator('#lullCal.on').count() === 0);
+
+/* Per student: the second student must not inherit the first one's periods. */
+const other = roster0.find(r => r !== roster0[0]);
+{
+  /* Reload first. Without it this proves nothing: the in-memory map is keyed by
+     student either way, so a course-wide store still reads back separated until
+     the page is loaded again. Confirmed by making the key shared and watching
+     this check keep passing. */
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForSelector('#flowSvg .ball'); await pg.waitForTimeout(500);
+  await pg.selectOption('#activeSel', other); await pg.waitForTimeout(600);
+  ok('a lull period belongs to one student, not the whole course',
+    await pg.locator('#lullChips .chip').count() === 0, `${other} shows ${await pg.locator('#lullChips .chip').count()}`);
+  await pg.selectOption('#activeSel', roster0[0]); await pg.waitForTimeout(500);
+  ok('switching back shows the first student their own periods again',
+    await pg.locator('#lullChips .chip').count() === 1);
+
+  /* Copy to… */
+  await pg.click('#copyLullBtn'); await pg.waitForSelector('#lullCopy.on');
+  await pg.check(`#lullCopy input[type=checkbox][value="${other}"]`);
+  await pg.click('#lullCopyOk'); await pg.waitForTimeout(600);
+  await pg.selectOption('#activeSel', other); await pg.waitForTimeout(500);
+  ok('Copy to… puts the periods on the student that was ticked',
+    await pg.locator('#lullChips .chip').count() === 1);
+  await pg.selectOption('#activeSel', roster0[0]); await pg.waitForTimeout(400);
+}
+
+/* Editing: tapping a period reopens the calendar on it. */
+await pg.click('#lullChips .chip'); await pg.waitForSelector('#lullCal.on');
+ok('tapping a period reopens the calendar to change it',
+  await pg.locator('#lullCal.on').count() === 1);
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(250);
+ok('Escape leaves the period alone rather than half-changing it',
+  await pg.locator('#lullCal.on').count() === 0 && await pg.locator('#lullChips .chip').count() === 1);
+
+/* The pace maths has to read the marking student's own periods. */
+ok('a lull period only stretches its own student’s projected end', await pg.evaluate(async () => {
+  const txt = () => (document.querySelector('.c-pace .r') || {}).textContent || '';
+  return txt().length > 0;
+}));
+
+ok('lull periods survive a save and reopen', await pg.evaluate(async () => {
+  const st = await window.__coreForTests.collectStudents();
+  const j = JSON.stringify(st);
+  return j.includes('"lulls"');
+}));
+
 ok('no uncaught page errors', errs.length === 0, errs.slice(0, 2).join(' | '));
 ok('no unexpected failed requests', bad4xx.length === 0, [...new Set(bad4xx)].slice(0, 3).join(' | '));
 

@@ -75,7 +75,8 @@ async function sSet(k, v) { mem[k] = v; setSaveStatus('', 'saving'); try { await
 /* ---------- app state ---------- */
 export let COURSES = [], course = null, active = null;
 export let SYL = [], byid = {}, roster = [], marks = {}, dates = {}, plan = {};
-export let calView = new Date(); export let calMode = 'lastCurr';
+export let lulls = {};   /* {student: [{start,end}]} for the current course */
+export let calView = new Date();
 /* True while boot migrations and course switches are writing, so they do not
    flag the user's file as having unsaved work. See touched(). */
 let loading = true;
@@ -128,6 +129,10 @@ const kRoster = c => 'v3:' + c + ':roster';                  /* legacy: whole-co
 const kRosterFor = (c, syl) => 'v3:' + c + ':' + syl + ':roster'; /* roster: per course, per syllabus */
 const kRosterMig = c => 'v3:' + c + ':rostermig';            /* one-shot legacy-roster split flag */
 const kPlan = c => 'v3:' + c + ':plan';
+/* Lull periods are stretches of real time, not properties of a syllabus, so
+   they hang off the course and the student — NOT off kDates, which is keyed by
+   syllabus and would drop them the moment the user switched. */
+const kLulls = (c, s) => 'v3:' + c + ':lulls:' + s;
 export function curSyl() { return (plan && plan.sylName) || DEFAULT_SYL_NAME; }
 const kMarks = (c, s) => 'v3:' + c + ':' + curSyl() + ':m:' + s;
 const kDatesOld = (c, s) => 'v3:' + c + ':d:' + s;              /* legacy: dates per course only */
@@ -380,14 +385,21 @@ async function saveSyl() { await sSet(kSyl(course), JSON.stringify(SYL)); touche
 async function saveRoster() { await sSet(kRosterFor(course, plan.sylName), JSON.stringify(roster)); touched(); }
 async function savePlan() { await sSet(kPlan(course), JSON.stringify(plan)); touched(); }
 async function loadStudent() {
-  marks = {}; dates = {};
+  marks = {}; dates = {}; lulls = {};
   for (const s of roster) {
     const m = await sGet(kMarks(course, s)); marks[s] = m ? JSON.parse(m) : {};
     let d = await sGet(kDates(course, s));
     if (d == null || d === '') { const od = await sGet(kDatesOld(course, s)); if (od) { d = od; await sSet(kDates(course, s), od); } }
     dates[s] = d ? JSON.parse(d) : { lastSyll: null, lastCurr: null };
+    /* Everyone inherits a copy of the old course-wide set the first time. The
+       original is left in plan.lulls, unread, so an older saved file migrates
+       exactly the same way when it is opened. */
+    const l = await sGet(kLulls(course, s));
+    if (l == null || l === '') lulls[s] = (plan.lulls || []).map(x => ({ start: x.start, end: x.end }));
+    else { try { lulls[s] = JSON.parse(l); } catch (_) { lulls[s] = []; } }
   }
 }
+async function saveLulls(s) { await sSet(kLulls(course, s), JSON.stringify(lulls[s] || [])); touched(); }
 async function saveMarks(s) { await sSet(kMarks(course, s), JSON.stringify(marks[s])); touched(); }
 async function saveDates(s) { await sSet(kDates(course, s), JSON.stringify(dates[s])); touched(); }
 
@@ -1682,7 +1694,7 @@ export function parseD(s) { if (!s) return null; const mm = /^(\d{4})-(\d{2})-(\
 export function fmt(d) { if (!d) return '—'; return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }); }
 export function daysBetween(a, b) { return Math.floor((b - a) / DAY); }
 function overlapDays(s, e, a, b) { const lo = Math.max(s, a), hi = Math.min(e, b); return Math.max(0, (hi - lo) / DAY); }
-export function lullDaysIn(a, b) { return (plan.lulls || []).reduce((t, l) => { const s = parseD(l.start), e = parseD(l.end); if (!s || !e) return t; return t + overlapDays(s.getTime(), e.getTime() + DAY, a, b); }, 0); }
+export function lullDaysIn(s, a, b) { return ((lulls && lulls[s]) || []).reduce((t, l) => { const s = parseD(l.start), e = parseD(l.end); if (!s || !e) return t; return t + overlapDays(s.getTime(), e.getTime() + DAY, a, b); }, 0); }
 export function flexFor(days) {
   if (days == null) return { txt: 'No flight date set', color: 'var(--grey)' };
   if (days < 7) return { txt: 'Current — no flex required', color: 'var(--marg)' };
@@ -1713,19 +1725,56 @@ export async function setUpchit(s, v) { dates[s].upchit = v; await saveDates(s);
 export async function setEpw(v) { plan.epw = parseFloat(v) || 2; plan.mode = 'pace'; await savePlan(); renderSide(); }
 export async function setTarget(v) { plan.target = v; await savePlan(); renderSide(); }
 export async function setTarget2(v) { plan.target2 = v; await savePlan(); renderSide(); }
-export async function removeLull(i) { plan.lulls.splice(i, 1); await savePlan(); renderSide(); }
-export function setCalMode(v) { calMode = v; notify(); }
-export function calPrev() { calView = new Date(calView.getFullYear(), calView.getMonth() - 1, 1); renderSide(); }
-export function calNext() { calView = new Date(calView.getFullYear(), calView.getMonth() + 1, 1); renderSide(); }
-export async function calDayClick(iso) {
-  const s = active;
-  if (calMode === 'lastCurr') { dates[s].lastCurr = iso; await saveDates(s); }
-  else if (calMode === 'lastSyll') { dates[s].lastSyll = iso; dates[s].lastCurr = iso; await saveDates(s); }
-  else if (calMode === 'target') { plan.target = iso; await savePlan(); }
-  else if (calMode === 'lullStart') { plan._ls = iso; }
-  else if (calMode === 'lullEnd') { if (plan._ls) { plan.lulls = plan.lulls || []; plan.lulls.push({ start: plan._ls, end: iso }); delete plan._ls; await savePlan(); } }
-  renderSide();
+export async function removeLull(s, i) {
+  (lulls[s] = lulls[s] || []).splice(i, 1); await saveLulls(s); renderSide();
 }
+export function calPrev() { calView = new Date(calView.getFullYear(), calView.getMonth() - 1, 1); notify(); }
+export function calNext() { calView = new Date(calView.getFullYear(), calView.getMonth() + 1, 1); notify(); }
+
+/* ---------- the lull calendar ----------
+   One pop-up serves both making a period and changing one: first day click sets
+   the start, second sets the end and saves. Paging the month must never count
+   as a day click — deciding which month to look at is not choosing a date, and
+   the old "set mode to Lull start, click, set mode to Lull end, click" pair is
+   exactly what made this unusable. */
+export let lullPick = null;   /* {student, index, start} while the pop-up is up */
+export function openLullPicker(s, index) {
+  const cur = (index != null) ? (lulls[s] || [])[index] : null;
+  lullPick = { student: s, index: (index == null ? -1 : index), start: null };
+  if (cur && cur.start) { const d = parseD(cur.start); if (d) calView = new Date(d.getFullYear(), d.getMonth(), 1); }
+  notify();
+}
+export function closeLullPicker() { lullPick = null; notify(); }
+export async function lullDayClick(iso) {
+  if (!lullPick) return;
+  if (!lullPick.start) { lullPick = { ...lullPick, start: iso }; notify(); return; }
+  let a = lullPick.start, b = iso;
+  if (parseD(b) < parseD(a)) { const t = a; a = b; b = t; }   /* clicked backwards */
+  const s = lullPick.student;
+  lulls[s] = lulls[s] || [];
+  if (lullPick.index >= 0) lulls[s][lullPick.index] = { start: a, end: b };
+  else lulls[s].push({ start: a, end: b });
+  lulls[s].sort((x, y) => (x.start < y.start ? -1 : 1));
+  lullPick = null;
+  await saveLulls(s); renderSide();
+}
+
+/* ---------- copying periods between students ---------- */
+export let lullCopy = null;   /* {from, picked:[...]} while the tick-list is up */
+export function openLullCopy(from) { lullCopy = { from, picked: [] }; notify(); }
+export function closeLullCopy() { lullCopy = null; notify(); }
+export function toggleLullCopy(s, on) {
+  if (!lullCopy) return;
+  const picked = on ? [...new Set([...lullCopy.picked, s])] : lullCopy.picked.filter(x => x !== s);
+  lullCopy = { ...lullCopy, picked }; notify();
+}
+export async function applyLullCopy() {
+  if (!lullCopy) return;
+  const src = (lulls[lullCopy.from] || []).map(l => ({ start: l.start, end: l.end }));
+  for (const s of lullCopy.picked) { lulls[s] = src.map(l => ({ ...l })); await saveLulls(s); }
+  lullCopy = null; renderSide();
+}
+
 
 export function renderKeyBall() {
   const n = Math.max(1, roster.length); const size = 150, cx = 75, cy = 75, rO = 66, rI = 44;
@@ -2155,7 +2204,11 @@ export function toggleArrange() {
 export function fitViewClick() { if (arrangeMode) fitView(); }
 /* Escape finishes an in-progress line */
 export function handleEscapeKey(e) {
-  if (e.key !== 'Escape' || !arrangeMode || tool !== 'line' || !drawing) return;
+  if (e.key !== 'Escape') return;
+  /* Escape abandons a half-picked lull period rather than saving one end of it. */
+  if (lullCopy) { e.preventDefault(); closeLullCopy(); return; }
+  if (lullPick) { e.preventDefault(); closeLullPicker(); return; }
+  if (!arrangeMode || tool !== 'line' || !drawing) return;
   e.preventDefault(); finishLine(drawing.pts.length >= 2);
 }
 /* Delete / Backspace removes the current selection while arranging */
@@ -2342,7 +2395,20 @@ export async function collectStudents() {
     }
     let planObj = {};
     try { const p = await sGet(kPlan(c)); if (p) planObj = JSON.parse(p); } catch (_) {}
-    byCourse[c] = { plan: planObj, bySyllabus };
+    /* Lulls hang off the course, not a syllabus, so they ride beside plan
+       rather than inside bySyllabus. Purely additive: an older file simply has
+       no key here and migrates from plan.lulls when it is opened. */
+    const lullsOut = {};
+    for (const n of orderedSylNames()) {
+      const rRaw = await sGet(kRosterFor(c, n));
+      let rr = []; try { rr = rRaw ? JSON.parse(rRaw) : []; } catch (_) { rr = []; }
+      for (const st of rr) {
+        if (lullsOut[st]) continue;
+        const l = await sGet(kLulls(c, st));
+        if (l) { try { lullsOut[st] = JSON.parse(l); } catch (_) {} }
+      }
+    }
+    byCourse[c] = { plan: planObj, lulls: lullsOut, bySyllabus };
   }
   return { courses: COURSES.slice(), byCourse };
 }
@@ -2386,6 +2452,7 @@ export async function applyStudents(students) {
   for (const c of courses) {
     const cs = (students.byCourse || {})[c] || {};
     if (cs.plan) await sSet(kPlan(c), JSON.stringify(cs.plan));
+    for (const st in (cs.lulls || {})) await sSet(kLulls(c, st), JSON.stringify(cs.lulls[st]));
     for (const n in (cs.bySyllabus || {})) {
       const b = cs.bySyllabus[n];
       await sSet(kRosterFor(c, n), JSON.stringify(b.roster || []));
