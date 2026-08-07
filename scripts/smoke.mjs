@@ -179,6 +179,51 @@ ok('collected charts name nobody',
 ok('collected students carry the roster',
   !!collected && JSON.stringify(collected.students).includes('STUDENT '));
 
+/* ---- writing charts back never disturbs people ---- */
+const applied = await pg.evaluate(async () => {
+  const t = window.__coreForTests; if (!t) return null;
+  const grab = () => Object.fromEntries(
+    Object.keys(localStorage).filter(k => k.includes(':m:')).map(k => [k, localStorage.getItem(k)]));
+  const before = grab();
+  const charts = await t.collectCharts(['2026']);
+  charts.syllabi['2026'] = charts.syllabi['2026'].slice(0, 5);   /* a much smaller chart */
+  await t.applyCharts(charts, { names: ['2026'], mode: 'replace', rename: null });
+  return { same: JSON.stringify(before) === JSON.stringify(grab()),
+           count: JSON.parse(localStorage['ocu:v3:master:syls'])['2026'].length };
+});
+ok('replacing a syllabus writes the new chart', !!applied && applied.count === 5,
+  applied ? `${applied.count} events` : 'no result');
+ok('replacing a syllabus leaves every mark untouched', !!applied && applied.same);
+
+/* The check above would still pass if applyCharts rewrote roster keys with
+   identical values, so watch the writes themselves. */
+const noPeople = await pg.evaluate(async () => {
+  const t = window.__coreForTests; if (!t) return null;
+  const written = [];
+  const realSet = Storage.prototype.setItem;
+  Storage.prototype.setItem = function (k, v) { written.push(k); return realSet.call(this, k, v); };
+  try { await t.applyCharts(await t.collectCharts(['2026']), { names: ['2026'], mode: 'replace', rename: null }); }
+  finally { Storage.prototype.setItem = realSet; }
+  return written.filter(k => /:m:|:d:|:roster/.test(k));
+});
+ok('applying charts writes no roster, mark or date key',
+  !!noPeople && noPeople.length === 0, (noPeople || []).slice(0, 3).join(', '));
+
+/* ---- writing students back ---- */
+const stApplied = await pg.evaluate(async () => {
+  const t = window.__coreForTests; if (!t) return null;
+  await t.applyStudents({ courses: ['SMOKE COURSE'], byCourse: { 'SMOKE COURSE': {
+    plan: { sylName: '2026' },
+    bySyllabus: { '2026': { roster: ['STUDENT Z'],
+      marks: { 'STUDENT Z': { 'ST-01': { g: 'dco', f: 3 } } },
+      dates: { 'STUDENT Z': { lastSyll: '2026-02-03', lastCurr: null } } } } } } });
+  return { roster: localStorage['ocu:v3:SMOKE COURSE:2026:roster'],
+           marks: localStorage['ocu:v3:SMOKE COURSE:2026:m:STUDENT Z'] };
+});
+ok('applying students writes the roster', !!stApplied && (stApplied.roster || '').includes('STUDENT Z'));
+ok('applying students writes marks and failure counts',
+  !!stApplied && (stApplied.marks || '').includes('"f":3'));
+
 ok('no uncaught page errors', errs.length === 0, errs.slice(0, 2).join(' | '));
 ok('no unexpected failed requests', bad4xx.length === 0, [...new Set(bad4xx)].slice(0, 3).join(' | '));
 

@@ -2424,6 +2424,57 @@ export async function collectStudents() {
   return { courses: COURSES.slice(), byCourse };
 }
 
+/* ---------- writing state back in, from the user's file ---------- */
+
+/* Charts only. Writes syllabus definitions, layouts and event info — and
+   nothing filed under a student. THE RULE: no roster, mark or date key may be
+   written here, so importing a chart can never disturb anyone's progress.
+   scripts/smoke.mjs pins that by watching every localStorage write. */
+export async function applyCharts(charts, opts) {
+  const o = opts || {};
+  const list = (o.names && o.names.length) ? o.names : (charts.order || Object.keys(charts.syllabi || {}));
+  const applied = [];
+  for (const src of list) {
+    const events = (charts.syllabi || {})[src];
+    if (!events) continue;
+    const target = (o.mode === 'add' && o.rename && o.rename.from === src) ? o.rename.to : src;
+    CUSTOMS[target] = JSON.parse(JSON.stringify(events));
+    const lay = (charts.layouts || {})[src];
+    if (lay) await sSet(kLayoutFor(course, target), JSON.stringify(lay));
+    if (SYL_TOMB[target]) delete SYL_TOMB[target];
+    if (SYL_HIDDEN.indexOf(target) >= 0) SYL_HIDDEN = SYL_HIDDEN.filter(n => n !== target);
+    if (!SYL_ORDER.includes(target)) SYL_ORDER.push(target);
+    applied.push(target);
+  }
+  await sSet(kSyls(course), JSON.stringify(CUSTOMS));
+  if (charts.eventInfo) {
+    for (const k in charts.eventInfo) eventInfo[k] = Object.assign({}, eventInfo[k] || {}, charts.eventInfo[k]);
+    await saveEventInfo();
+  }
+  await saveSylPrefs(); await saveSylOrder();
+  await loadCourse(course);
+  refreshSyl(); renderBoard(); renderSide();
+  return { applied };
+}
+
+/* People only. Never writes a syllabus or layout key. */
+export async function applyStudents(students) {
+  const courses = (students && students.courses) || [];
+  for (const c of courses) {
+    const cs = (students.byCourse || {})[c] || {};
+    if (cs.plan) await sSet(kPlan(c), JSON.stringify(cs.plan));
+    for (const n in (cs.bySyllabus || {})) {
+      const b = cs.bySyllabus[n];
+      await sSet(kRosterFor(c, n), JSON.stringify(b.roster || []));
+      for (const s in (b.marks || {})) await sSet(kMarksFor(c, n, s), JSON.stringify(b.marks[s]));
+      for (const s in (b.dates || {})) await sSet(kDatesFor(c, n, s), JSON.stringify(b.dates[s]));
+    }
+  }
+  if (courses.length) await sSet(kCourses, JSON.stringify(courses));
+  await reloadFromStore();
+  return { courses: courses.slice() };
+}
+
 /* ---------- init ---------- */
 export let ready = false;
 const cloudCfgFn = () => { try { return cloudCfg(); } catch (e) { return null; } };
@@ -2445,7 +2496,8 @@ export async function init() {
   /* The board is rendered imperatively and this module exports nothing to the
      page, so scripts/smoke.mjs has no other way to reach these. */
   if (typeof window !== 'undefined') {
-    window.__coreForTests = { layoutSnapshotFor, collectCharts, collectStudents, SYLLABI, DEFAULT_LAYOUTS };
+    window.__coreForTests = { layoutSnapshotFor, collectCharts, collectStudents,
+      applyCharts, applyStudents, SYLLABI, DEFAULT_LAYOUTS };
     window.__fileFormatForTests = FMT;
   }
 }
