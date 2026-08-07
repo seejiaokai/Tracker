@@ -263,6 +263,29 @@ const badRef = Object.entries(REFRESHER_2026).filter(([id, want]) =>
 ok('2026 carries the DAAR / NAAR refresher chain', badRef.length === 0,
   badRef.map(([id]) => `${id}=${by26r[id] ? '[' + (by26r[id].prereqs || []).join(',') + ']' : 'MISSING'}`).join(' | '));
 
+/* Links that keep being "corrected" WRONGLY, because the chart images extracted from the .docx
+   are INCOMPLETE. The Word file draws each page as a base picture with extra pieces laid over
+   it — the red X strike-throughs, the IEPE ellipse on B-14, a TR(S)-7 ellipse, an INT-1 aircraft
+   (they come out as word/media/image4,5,9,10,13,14). Unzipping gets the base and loses the
+   overlays, so a reader working from the extracted pages sees a box missing from a chain and
+   "helpfully" reads straight through it. Every entry below was read that way at least once and
+   is wrong; each was then settled against the user's own screenshots of the rendered document.
+   If a future pass wants to change one of these, get a fresh screenshot first. */
+const CHART_2026_OVERLAY_TRAPS = {
+  'TR(S)-7': ['TR(S)-LAO'],                              /* not TR(S)-6: TR(S)-LAO is drawn grey */
+  'INT(S)-1': ['ST-09', 'ST-11', 'IEPE/IPC', 'IAT-07'],  /* not EPE: IEPE sits in the F column */
+  'TR-5(P)': ['AAS-04', 'IEPE/IPC', 'TR-4'],             /* IEPE feeds this trunk too */
+  'LASDT-1': ['JMP-03', 'INT-1', 'LASDT(S)-1'],          /* not BFM-7: INT-1 sits between them */
+  'ACM-3': ['ACM(S)-2', 'ACM-2'],                        /* not INT-1 */
+  'INT-1': ['BFM-7', 'INT(S)-4'],                        /* not ACM-2 */
+  'T-10': ['AAS-04', 'IAT-08'],                          /* AAS-04 arrives via join K from B-14 */
+};
+const by26t = Object.fromEntries(SYLLABI['2026'].map(e => [e.id, e]));
+const trapped = Object.entries(CHART_2026_OVERLAY_TRAPS).filter(([id, want]) =>
+  JSON.stringify((by26t[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+ok('2026 links that the extracted chart images get wrong stay right', trapped.length === 0,
+  trapped.map(([id]) => `${id}=[${(by26t[id]?.prereqs || []).join(',')}]`).join(' | '));
+
 /* The A/G - A/A surface-attack sim chain. Page B-28 appears to break it: SA(S)-2's only line
    runs left into SA-1, SA(S)-3 looks fed only by AGW-02, and SA(S)-5 only by IAT-12. Three
    independent readings all concluded the links were absent and should be deleted. THEY MUST

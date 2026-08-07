@@ -84,6 +84,28 @@ A `403` on `CONNECT` instead means the environment's network policy no longer al
 `curl -sS "$HTTPS_PROXY/__agentproxy/status"` and read `recentRelayFailures`
 (use `$HTTPS_PROXY`; the port changes every session).
 
+## Reading the syllabus .docx — the images are incomplete
+
+**Do not trust chart pages unzipped from the document.** Word stores each page as a base
+picture with extra pieces laid *over* it: the red X strike-throughs, the IEPE ellipse on
+B-14, a TR(S)-7 ellipse, an INT-1 aircraft. Those overlays come out as their own tiny
+`word/media/image4,5,9,10,13,14` and are **absent from the page you extract**, so a box
+vanishes mid-chain and the reading silently skips it. This produced five confidently wrong
+answers in one session. **Ask the user for screenshots of the rendered pages** — those show
+the composited truth. `scripts/smoke.mjs` pins the specific links this trap corrupts.
+
+Two more traps, both real:
+
+- PNGs are RGBA. `.convert('RGB')` flattens transparency onto **black** and two pages come
+  out solid black. Composite onto white: `Image.alpha_composite(white, im)`.
+- Page-join letters (A, B, … AA, … NN) are **wires, not events**, and a prerequisite can
+  travel two or three pages through them. Read each page in isolation and you lose the link.
+  Transcribe letters as nodes (`T-02 → A`, `A → AVI-06`) and resolve the chains afterwards.
+
+The map is authoritative: the pages print *"Flowchart is authoritative and the table
+prerequisites are treated as superseded."* Two blocks of event tables exist and disagree with
+each other in seven places; use them only as a weak cross-check.
+
 ## Architecture
 
 - `src/app/core.js` — the whole app model plus the imperatively-rendered SVG flow
