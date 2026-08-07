@@ -30,8 +30,13 @@ export async function pickOpen() {
    so the caller can say so instead of failing silently. */
 export async function ensureWritable(handle) {
   if (!handle || !handle.queryPermission) return false;
-  if (await handle.queryPermission({ mode: 'readwrite' }) === 'granted') return true;
-  return await handle.requestPermission({ mode: 'readwrite' }) === 'granted';
+  try {
+    if (await handle.queryPermission({ mode: 'readwrite' }) === 'granted') return true;
+    /* Throws when the click that triggered this has already expired — asking for
+       write permission needs live user activation. Never let that escape as an
+       unhandled rejection, or the button just appears dead. */
+    return await handle.requestPermission({ mode: 'readwrite' }) === 'granted';
+  } catch (_) { return false; }
 }
 
 export async function writeTo(handle, text) {
