@@ -120,6 +120,16 @@ each other in seven places; use them only as a weak cross-check.
   porting here too**; it has its own copy of the same logic and has drifted before
   (the `escapeId` XSS fix landed in `core.js` alone and sat unfixed here).
 
+## Superpowers plugin
+
+`obra/superpowers` is enabled for this repo in `.claude/settings.json`, so its
+skills (`superpowers:brainstorming`, `:test-driven-development`, `:systematic-debugging`,
+`:writing-plans`, …) load in every session. Declaring it there is not enough on its
+own — a GitHub-marketplace plugin is only *declared* by settings, and this remote
+image starts with an empty `~/.claude`, so `.claude/hooks/session-start.sh` re-installs
+it each session. Startup prints `superpowers: ready`; anything else means the skills
+are missing and the printed `claude plugin install` command is the fix.
+
 ## Gotchas
 
 - Storage: `sync/cloud.js` → `sync/local.js`, which tries SharePoint and silently
