@@ -19,6 +19,32 @@ The user sent all 22 pages this way; they were readable then and unrecoverable a
 Only the `.docx` and two early photos ever reached the filesystem. Say this up front, so the
 composited pages can be kept alongside the repo and this whole trap disappears for good.
 
+## PAUSED — Plan 9 is waiting on the user, 7 Aug 2026
+
+The syllabus-file work is built and live **except its last step**. Everything is in
+`docs/superpowers/specs/2026-08-07-syllabus-file-design.md` and the nine plans beside it.
+
+Done and on the site: the file format, reading and writing state, file access, 📁 Open,
+✓ Save changes, ⊕ Import syllabus, ⤓ Save a copy, and the removal of five buttons plus
+`pristine.html`. Bundle fell 1,005 kB → 436 kB.
+
+**Plan 9 — taking the built-in charts out of `src/data/syllabi.js` — MUST NOT START until
+the user has saved a file, reopened it, and said in their own words that their syllabi are
+inside it.** Any syllabus they have never edited exists *only* in the code Plan 9 deletes.
+No check can stand in for that confirmation; the file is on their machine. If you reach
+Plan 9 without it in the conversation, stop and ask.
+
+Proven already, so do not re-litigate it: a file saved by the current app restores every
+syllabus, layout, event name, student and mark into an app whose charts have been deleted
+from the code. That test also found and fixed the crash that used to leave the empty app
+showing one syllabus of five.
+
+**Open bug, unresolved.** The user reported a second save appearing to do nothing, and the
+file not holding the second round of changes. It could not be reproduced. Saving now
+verifies the write by reading the file back, reports `NOT SAVED` on any mismatch, and shows
+"saved N KB at HH:MM" beside the file name. If they report it again, that note is the
+evidence — ask whether the time changed.
+
 ## What this session did
 
 `main` and `claude/read-handoff-docs-8imnhp` are level and clean; the chart work below is
