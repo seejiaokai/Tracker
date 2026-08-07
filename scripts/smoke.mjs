@@ -797,6 +797,109 @@ ok('lull periods survive a save and reopen', await pg.evaluate(async () => {
   return j.includes('"lulls"');
 }));
 
+/* ---- opening on the last thing you marked ----
+   The chart is ~10,000px tall, so a student halfway through their course had to
+   scroll all the way down every single time to mark the next event. */
+await pg.reload({ waitUntil: 'networkidle' });
+await pg.waitForSelector('#flowSvg .ball');
+/* Pick whichever syllabus actually has a tall chart. Naming one does not work:
+   an earlier check deliberately replaces 2026 with a five-event chart, so by
+   here the obvious choice is the shortest one in the list. */
+{
+  const opts = await pg.evaluate(() => [...document.querySelectorAll('#sylSel option')].map(o => o.value));
+  let best = null, bestN = -1;
+  for (const o of opts) {
+    await pg.selectOption('#sylSel', o); await pg.waitForTimeout(500);
+    const n = await pg.locator('#flowSvg .ball').count();
+    if (n > bestN) { bestN = n; best = o; }
+  }
+  await pg.selectOption('#sylSel', best); await pg.waitForTimeout(900);
+}
+const bigBoard = await pg.evaluate(() => {
+  const bd = document.getElementById('board');
+  return { balls: document.querySelectorAll('#flowSvg .ball').length,
+    scrollable: bd.scrollHeight > bd.clientHeight * 2 };
+});
+ok('these checks run against a chart taller than the screen',
+  bigBoard.balls > 100 && bigBoard.scrollable, JSON.stringify(bigBoard));
+/* Rosters are per syllabus, so the tallest chart may have nobody on it — and
+   grading is deliberately a no-op with no students, which silently made this
+   whole block measure nothing. */
+if ((await pg.locator('#activeSel option').count()) < 2) {
+  await addStudent('STUDENT TALL1');
+  await addStudent('STUDENT TALL2');
+}
+ok('the tall syllabus has students to mark',
+  (await pg.locator('#activeSel option').count()) >= 2,
+  `${await pg.locator('#activeSel option').count()} students`);
+
+/* Mark something well down the chart. */
+const deep = await pg.evaluate(() => {
+  const balls = [...document.querySelectorAll('#flowSvg .ball')];
+  const withY = balls.map(g => ({ id: g.dataset.id, y: g.getBBox().y })).sort((a, b) => a.y - b.y);
+  return withY[Math.floor(withY.length * 0.8)];      /* 80% of the way down */
+});
+await pg.evaluate(id => {
+  const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === id);
+  g.scrollIntoView({ block: 'center' });
+  g.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+}, deep.id);
+await pg.waitForSelector('#pop');
+await pg.locator('#pop .opts button', { hasText: 'DCO' }).click();
+await pg.waitForTimeout(700);
+
+await pg.reload({ waitUntil: 'networkidle' });
+await pg.waitForSelector('#flowSvg .ball');
+await pg.waitForTimeout(1200);
+const landed = await pg.evaluate(id => {
+  const bd = document.getElementById('board');
+  const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === id);
+  if (!g) return { found: false };
+  const r = g.getBoundingClientRect(), b = bd.getBoundingClientRect();
+  return { found: true, scrollTop: Math.round(bd.scrollTop),
+    inView: r.top >= b.top - 2 && r.bottom <= b.bottom + 2 };
+}, deep.id);
+ok('opening the app lands on the last event marked, not at the top of the chart',
+  landed.found && landed.inView && landed.scrollTop > 100,
+  `${deep.id}: scrolled ${landed.scrollTop}px, in view ${landed.found ? landed.inView : 'n/a'}`);
+
+/* Switching student jumps to that student's own last mark. */
+const two = await pg.evaluate(() => [...document.querySelectorAll('#activeSel option')].map(o => o.value));
+/* Whoever the app came back on is the one who did the marking — not
+   necessarily the first name in the list. */
+const marker = await pg.inputValue('#activeSel');
+if (two.length >= 2) {
+  const otherS = two.find(r => r !== marker);
+  await pg.selectOption('#activeSel', otherS); await pg.waitForTimeout(600);
+  /* Scroll right away from the mark first. Without this the board never moved
+     between the two reads and the check passed on a view that had not changed. */
+  await pg.evaluate(() => { document.getElementById('board').scrollTop = 0; });
+  await pg.waitForTimeout(200);
+  const away = await pg.evaluate(() => Math.round(document.getElementById('board').scrollTop));
+  await pg.selectOption('#activeSel', marker); await pg.waitForTimeout(800);
+  const back = await pg.evaluate(id => {
+    const bd = document.getElementById('board');
+    const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === id);
+    const r = g.getBoundingClientRect(), b = bd.getBoundingClientRect();
+    return { scrollTop: Math.round(bd.scrollTop), inView: r.top >= b.top - 2 && r.bottom <= b.bottom + 2 };
+  }, deep.id);
+  ok('switching back to a student returns to their own last mark',
+    back.inView && away === 0 && back.scrollTop > 100,
+    `scrolled to ${away}px, switching back moved to ${back.scrollTop}px`);
+}
+
+/* A recorded syllabus that has since been deleted must not break the load. */
+ok('a remembered syllabus that no longer exists does not break opening the app',
+  await pg.evaluate(async () => {
+    localStorage.setItem('v3:' + document.getElementById('courseSel').value + ':lastStudent', 'NO SUCH PERSON');
+    return true;
+  }));
+await pg.reload({ waitUntil: 'networkidle' });
+await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+ok('the app still opens with a remembered student who is gone',
+  await pg.locator('#flowSvg .ball').count() > 0 && errs.length === 0,
+  `${await pg.locator('#flowSvg .ball').count()} events, ${errs.length} page errors`);
+
 ok('no uncaught page errors', errs.length === 0, errs.slice(0, 2).join(' | '));
 ok('no unexpected failed requests', bad4xx.length === 0, [...new Set(bad4xx)].slice(0, 3).join(' | '));
 

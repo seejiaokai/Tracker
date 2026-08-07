@@ -76,6 +76,7 @@ async function sSet(k, v) { mem[k] = v; setSaveStatus('', 'saving'); try { await
 export let COURSES = [], course = null, active = null;
 export let SYL = [], byid = {}, roster = [], marks = {}, dates = {}, plan = {};
 export let lulls = {};   /* {student: [{start,end}]} for the current course */
+export let lastEdit = {};   /* {student: {syl, event}} for the current course */
 export let calView = new Date();
 /* True while boot migrations and course switches are writing, so they do not
    flag the user's file as having unsaved work. See touched(). */
@@ -133,6 +134,10 @@ const kPlan = c => 'v3:' + c + ':plan';
    they hang off the course and the student — NOT off kDates, which is keyed by
    syllabus and would drop them the moment the user switched. */
 const kLulls = (c, s) => 'v3:' + c + ':lulls:' + s;
+/* Where each student was last marking, so opening the app does not start at the
+   top of a 10,000px chart every time. */
+const kLast = (c, s) => 'v3:' + c + ':last:' + s;
+const kLastStudent = c => 'v3:' + c + ':lastStudent';
 export function curSyl() { return (plan && plan.sylName) || DEFAULT_SYL_NAME; }
 const kMarks = (c, s) => 'v3:' + c + ':' + curSyl() + ':m:' + s;
 const kDatesOld = (c, s) => 'v3:' + c + ':d:' + s;              /* legacy: dates per course only */
@@ -326,6 +331,15 @@ async function loadCourse(c) {
   }
   /* rename migration: legacy syllabus names -> 2026 */
   if (SYL_RENAME[plan.sylName]) { plan.__oldSyl = plan.sylName; plan.sylName = SYL_RENAME[plan.sylName]; await savePlan(); }
+  /* Open on whatever was last marked. Done here, before the roster and layout
+     load, so it costs no second pass and writes nothing. */
+  const __lastS = await sGet(kLastStudent(c));
+  if (__lastS) {
+    try {
+      const rec = JSON.parse(await sGet(kLast(c, __lastS)) || 'null');
+      if (rec && rec.syl && sylSource(rec.syl)) plan.sylName = rec.syl;
+    } catch (_) {}
+  }
   let __src = sylSource(plan.sylName);
   if (!__src) { /* named syllabus vanished -> fall back cleanly */
     plan.sylName = firstSylName();
@@ -340,7 +354,7 @@ async function loadCourse(c) {
   await migrateRosters(c);
   const rr = await sGet(kRosterFor(c, plan.sylName));
   roster = rr ? JSON.parse(rr) : [];
-  active = roster[0] || null;
+  active = (__lastS && roster.includes(__lastS)) ? __lastS : (roster[0] || null);
   await loadLayout();
   await loadStudent();
   /* one-time marks + layout migration from the old syllabus name */
@@ -385,7 +399,7 @@ async function saveSyl() { await sSet(kSyl(course), JSON.stringify(SYL)); touche
 async function saveRoster() { await sSet(kRosterFor(course, plan.sylName), JSON.stringify(roster)); touched(); }
 async function savePlan() { await sSet(kPlan(course), JSON.stringify(plan)); touched(); }
 async function loadStudent() {
-  marks = {}; dates = {}; lulls = {};
+  marks = {}; dates = {}; lulls = {}; lastEdit = {};
   for (const s of roster) {
     const m = await sGet(kMarks(course, s)); marks[s] = m ? JSON.parse(m) : {};
     let d = await sGet(kDates(course, s));
@@ -394,6 +408,7 @@ async function loadStudent() {
     /* Everyone inherits a copy of the old course-wide set the first time. The
        original is left in plan.lulls, unread, so an older saved file migrates
        exactly the same way when it is opened. */
+    try { lastEdit[s] = JSON.parse(await sGet(kLast(course, s)) || 'null') || null; } catch (_) { lastEdit[s] = null; }
     const l = await sGet(kLulls(course, s));
     if (l == null || l === '') lulls[s] = (plan.lulls || []).map(x => ({ start: x.start, end: x.end }));
     else { try { lulls[s] = JSON.parse(l); } catch (_) { lulls[s] = []; } }
@@ -1804,9 +1819,42 @@ export function openPop(id, evt) {
   notify();
 }
 export function closePop() { pop = null; notify(); }
+
+/* ---------- where each student was last marking ---------- */
+async function noteLastEdit(s, id) {
+  if (!s || !id) return;
+  lastEdit[s] = { syl: curSyl(), event: id };
+  await sSet(kLast(course, s), JSON.stringify(lastEdit[s]));
+  await sSet(kLastStudent(course), s);
+}
+/* Scrolls the board so an event sits in the middle. The browser clamps to the
+   real scroll range, so an event near an edge simply comes as close as it can. */
+export function scrollToEvent(id) {
+  const bd = document.getElementById('board'); if (!bd || !id) return false;
+  const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === id);
+  if (!g) return false;
+  const r = g.getBoundingClientRect(), b = bd.getBoundingClientRect();
+  bd.scrollTop += (r.top + r.height / 2) - (b.top + b.height / 2);
+  bd.scrollLeft += (r.left + r.width / 2) - (b.left + b.width / 2);
+  return true;
+}
+/* Only when the record belongs to the syllabus on screen. Switching syllabus
+   under the user to chase a mark would be a surprise, and would prompt about
+   unsaved flow edits into the bargain. */
+export function showLastEdit(s) {
+  const rec = lastEdit[s];
+  if (!rec || !rec.event || rec.syl !== curSyl()) return false;
+  return scrollToEvent(rec.event);
+}
 export async function popGrade(v) {
   const s = active; const popId = pop && pop.id; if (!popId) return;
   if (v === 'cancel') { closePop(); return; }
+  /* A syllabus with nobody on its roster leaves active null, and grading threw
+     on marks[null][id]. Clicking an event on an empty course should do nothing,
+     not break the page. */
+  if (!s) { closePop(); return; }
+  await noteLastEdit(s, popId);
+  marks[s] = marks[s] || {};
   marks[s][popId] = marks[s][popId] || { g: 0, f: 0 }; marks[s][popId].g = v === '0' ? 0 : v;
   await saveMarks(s);
   if (byid[popId] && byid[popId].type === 'flight' && DONE.has(v)) {
@@ -1816,7 +1864,8 @@ export async function popGrade(v) {
   renderBoard(); renderSide(); closePop();
 }
 export async function popFail(delta) {
-  const s = active; const popId = pop && pop.id; if (!popId) return;
+  const s = active; const popId = pop && pop.id; if (!popId || !s) return;
+  marks[s] = marks[s] || {};
   marks[s][popId] = marks[s][popId] || { g: 0, f: 0 };
   marks[s][popId].f = Math.max(0, (marks[s][popId].f || 0) + delta);
   await saveMarks(s); renderBoard(); renderSide();
@@ -1891,7 +1940,12 @@ export async function removeStudent(v) {
   roster = roster.filter(x => x !== v); delete marks[v]; delete dates[v];
   await saveRoster(); if (active === v) active = roster[0] || null; refreshActive(); renderBoard(); renderSide();
 }
-export function setActive(v) { active = v; renderSide(); }
+export function setActive(v) {
+  active = v; renderSide();
+  /* Jump to where this student was last marked, so picking someone halfway
+     through their course does not land at the top of the chart. */
+  showLastEdit(v);
+}
 
 /* ---- syllabus display order ---- */
 const kSylOrder = () => SYL_NS + ':sylorder';
@@ -2657,6 +2711,9 @@ export async function init() {
   await loadCourse(COURSES[0]); await loadEventInfo(); await loadSylOrder();
   ready = true;
   refreshCourses(); refreshSyl(); refreshActive(); renderBoard(); renderSide();
+  /* After the first paint, so the balls exist to measure. */
+  if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => showLastEdit(active));
+  else showLastEdit(active);
   /* Unsaved work must not vanish quietly when the tab closes. */
   if (typeof window !== 'undefined')
     window.addEventListener('beforeunload', e => { if (fileDirty) { e.preventDefault(); e.returnValue = ''; } });
