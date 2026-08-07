@@ -323,7 +323,11 @@ async function loadCourse(c) {
     plan.sylName = firstSylName();
     await savePlan(); __src = sylSource(plan.sylName) || DEFAULT_SYLLABUS;
   }
-  SYL = JSON.parse(JSON.stringify(__src));
+  /* With no charts shipped in the code and none opened yet, DEFAULT_SYLLABUS is
+     undefined and JSON.parse(JSON.stringify(undefined)) throws, which aborted
+     loadCourse half-way and left the app looking broken. An empty board is the
+     correct state here: the user has simply not opened their file yet. */
+  SYL = __src ? JSON.parse(JSON.stringify(__src)) : [];
   byid = {}; SYL.forEach(e => byid[e.id] = e);
   await migrateRosters(c);
   const rr = await sGet(kRosterFor(c, plan.sylName));
