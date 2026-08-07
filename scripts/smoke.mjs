@@ -249,6 +249,24 @@ for (const [name, syl] of Object.entries(SYLLABI)) {
 }
 ok(`no new arrows longer than ${SPAN_LIMIT}px`, stretched.length === 0, stretched.join(' | '));
 
+/* The board reads top to bottom, so a prerequisite placed lower than the event
+   it feeds draws an arrow pointing back up the page. Cleared in the two charts
+   read against their own map; the rest are recorded, not endorsed — in Tx and
+   2024 it is still open whether the box or the link is the wrong one. */
+const BACKWARDS_BASELINE = { '2024': 2, '2026': 0, 'Tx 2026': 4, 'A/G - A/A 2026': 0, 'Tx 2024': 4 };
+const backwards = [];
+for (const [name, syl] of Object.entries(SYLLABI)) {
+  const L = DEFAULT_LAYOUTS[name]; if (!L) continue;
+  const up = [];
+  for (const e of syl) for (const p of e.prereqs || []) {
+    const a = L[p], b = L[e.id];
+    if (typeof a?.y === 'number' && typeof b?.y === 'number' && a.y > b.y) up.push(`${p}->${e.id}`);
+  }
+  const allowed = BACKWARDS_BASELINE[name] ?? 0;
+  if (up.length > allowed) backwards.push(`${name}: ${up.length}>${allowed} (${up.slice(0, 3).join(', ')})`);
+}
+ok('no new arrows pointing back up the page', backwards.length === 0, backwards.join(' | '));
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 await b.close();
 stopServer();
