@@ -243,6 +243,21 @@ const CHART_AGAA = {
 const byAG = Object.fromEntries(SYLLABI['A/G - A/A 2026'].map(e => [e.id, e]));
 const wrongAG = Object.entries(CHART_AGAA).filter(([id, want]) =>
   JSON.stringify((byAG[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+/* Read off the A/G - A/A map (images 20-29) and confirmed by a second independent reading,
+   then approved by the user. Each was a link the drawing carries but the syllabus had lost;
+   all four ADD a prerequisite, so they can only delay an event, never unlock one early. */
+const AGAA_ADDED = {
+  'TR(S)-1': ['T-04', 'ST-04', 'ST-05', 'OPS-02', 'OPS-03'],
+  'T-10': ['IAT-08', 'AAS-04'],
+  'TR-5(P)': ['TR-4', 'IEPE/IPC', 'AAS-04'],
+  'DAAR': ['AAS-04', 'INT(S)-2', 'TR-4'],
+};
+const byAG2 = Object.fromEntries(SYLLABI['A/G - A/A 2026'].map(e => [e.id, e]));
+const missAG = Object.entries(AGAA_ADDED).filter(([id, want]) =>
+  JSON.stringify((byAG2[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+ok('A/G - A/A carries the four links read off its map', missAG.length === 0,
+  missAG.map(([id]) => `${id}=[${(byAG2[id]?.prereqs || []).join(',')}]`).join(' | '));
+
 ok('A/G - A/A prereqs match its own course map', wrongAG.length === 0,
   wrongAG.map(([id]) => `${id}=[${(byAG[id]?.prereqs || []).join(',')}]`).join(' | '));
 
@@ -268,7 +283,11 @@ const SPAN_LIMIT = 1000;
    in the user's own charts. Tx 2026 / Tx 2024 / A/G - A/A 2026 still carry the
    LASDT->SA links that made 2026 look like spaghetti, so they are worth a look
    too — but changing them is a separate, confirmed-with-the-user job. */
-const SPAN_BASELINE = { '2024': 0, '2026': 2, 'Tx 2026': 3, 'A/G - A/A 2026': 8, 'Tx 2024': 3 };
+/* A/G - A/A went 8 -> 10 when the four map-confirmed links were restored: TR-4->DAAR and
+   AAS-04->T-10 are both genuine and both long, because AAS-04 and TR-4 sit far from their
+   consumers in the current layout. The links are right; the routing is ugly. Moving those
+   boxes closer is a layout change and needs the user, so the count is recorded, not hidden. */
+const SPAN_BASELINE = { '2024': 0, '2026': 2, 'Tx 2026': 3, 'A/G - A/A 2026': 10, 'Tx 2024': 3 };
 const stretched = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const L = DEFAULT_LAYOUTS[name]; if (!L) continue;
