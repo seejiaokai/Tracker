@@ -2527,6 +2527,82 @@ export async function openFileClick() {
   setSaveStatus('opened ' + openFileName, 'ok'); notify();
 }
 
+/* ---------- Save a copy: the handover case ----------
+   Students start OFF and are reset OFF on every open, not just the first. This
+   is the moment a file leaves the owner's hands, so it begins clean and they
+   have to opt in — the safety measure agreed when tick-boxes were chosen over
+   two files that cannot mix. */
+export let copyOpen = false, copyOpts = { charts: true, students: false }, copyPick = {};
+export function openCopy() {
+  copyOpts = { charts: true, students: false };
+  copyPick = {}; orderedSylNames().forEach(n => { copyPick[n] = (n === curSyl()); });
+  copyOpen = true; notify();
+}
+export function closeCopy() { copyOpen = false; notify(); }
+export function setCopyOpt(which, on) { copyOpts = { ...copyOpts, [which]: !!on }; notify(); }
+export function setCopyPick(name, on) { copyPick = { ...copyPick, [name]: !!on }; notify(); }
+
+export async function saveCopyClick() {
+  const names = Object.keys(copyPick).filter(n => copyPick[n]);
+  if (!copyOpts.charts && !copyOpts.students) { await uiAlert('Tick charts, students, or both.'); return; }
+  if (copyOpts.charts && !names.length) { await uiAlert('Tick at least one syllabus.'); return; }
+  const savedAt = new Date().toISOString();
+  const opts = { ...copyOpts };
+  const name = FMT.suggestedFileName(opts, savedAt);
+  let handle = null;
+  if (FS.canWriteInPlace()) { handle = await FS.pickSave(name); if (!handle) return; }
+  const text = JSON.stringify(FMT.buildFile({
+    charts: opts.charts ? await collectCharts(names) : null,
+    students: opts.students ? await collectStudents() : null, savedAt }), null, 2);
+  try {
+    if (handle) await FS.writeTo(handle, text); else FS.downloadInstead(name, text);
+  } catch (err) {
+    closeCopy(); setSaveStatus('copy NOT saved — ' + ((err && err.message) || err), 'err'); notify(); return;
+  }
+  closeCopy();
+  setSaveStatus('', 'ok'); notify();
+  await uiAlert('Copy saved as “' + (handle ? handle.name : name) + '”.\n\n'
+    + (opts.students ? 'It CONTAINS student names and marks.' : 'It contains charts only — no student names or marks.'));
+}
+
+/* Take one syllabus out of another file and drop it into what is already here —
+   for when a new syllabus is issued. Marks are never touched either way:
+   applyCharts writes no roster, mark or date key, which smoke.mjs pins by
+   watching every storage write. */
+export async function importSyllabusClick() {
+  if (!FS.canWriteInPlace()) { await uiAlert('This browser cannot open a file directly.\n\nUse Chrome or Edge.'); return; }
+  const picked = await FS.pickOpen();          /* no await before this — gesture */
+  if (!picked) return;
+  let obj; try { obj = JSON.parse(picked.text); } catch (_) { await uiAlert('That file is not readable as JSON.'); return; }
+  let info; try { info = FMT.describeFile(obj); } catch (e) { await uiAlert(e.message); return; }
+  if (!info.charts || !info.syllabusNames.length) { await uiAlert('That file holds no charts.'); return; }
+  const { charts } = FMT.readFile(obj);
+  const done = [];
+  for (const name of info.syllabusNames) {
+    if (!allSylNames().includes(name)) {
+      await applyCharts(charts, { names: [name], mode: 'replace', rename: null });
+      done.push(name); continue;
+    }
+    const c = await uiChoice(
+      '“' + name + '” already exists.\n\nReplace it, or add the incoming one under a new name?',
+      'Replace it', 'Add as new');
+    if (c === 'cancel') continue;
+    if (c === 'ok') {
+      await applyCharts(charts, { names: [name], mode: 'replace', rename: null });
+      done.push(name); continue;
+    }
+    const to = ((await uiPrompt('Name for the incoming syllabus:', name + ' (new)')) || '').trim();
+    if (!to || allSylNames().includes(to)) { await uiAlert('That name is blank or already taken.'); continue; }
+    await applyCharts(charts, { names: [name], mode: 'add', rename: { from: name, to } });
+    done.push(to);
+  }
+  if (done.length) { markFileDirty(); setSaveStatus('', 'ok'); }
+  await uiAlert(done.length
+    ? 'Brought in: ' + done.join(', ') + '.\n\nEveryone’s marks are untouched.\nPress Save changes to write this into your file.'
+    : 'Nothing was brought in.');
+  notify();
+}
+
 /* One Save button, not two. It saves the syllabus into the browser as it always
    did, and then writes your file — which is where the work really lives. */
 export async function saveChangesClick() {

@@ -56,6 +56,8 @@ export default function Header() {
           </select>
         </label>
         <button className="sm" id="openFileBtn" title="Open your syllabus file, or start a new one" onClick={core.openFileClick}>📁 Open</button>
+        <button className="sm" id="importSylBtn" title="Bring one syllabus in from another file, keeping everything you already have" onClick={core.importSyllabusClick}>⊕ Import syllabus</button>
+        <button className="sm" id="saveCopyBtn" title="Save a separate copy to hand over — your own file is not touched" onClick={core.openCopy}>⤓ Save a copy</button>
         <span className="sub" id="openFileName">{core.openFileName || 'no file open'}</span>
         {core.lastSavedAt ? <span className="sub" id="lastSaved">· {core.lastSavedAt}</span> : null}
         {core.openFileHasStudents ? <span className="sub" id="fileHasStudents">· contains student data</span> : null}
