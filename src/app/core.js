@@ -2518,6 +2518,15 @@ export async function openFileClick() {
 /* One Save button, not two. It saves the syllabus into the browser as it always
    did, and then writes your file — which is where the work really lives. */
 export async function saveChangesClick() {
+  /* Ask for write permission FIRST, before anything else awaits. Opening a file
+     only grants read, so saving has to ask — and the browser only allows that
+     question while the click that started it is still live. Doing any other work
+     first spends that click and the request fails, which is what made this
+     button look dead after opening a file. */
+  if (fileHandle && !await FS.ensureWritable(fileHandle)) {
+    setSaveStatus('not saved — allow the browser to write to your file, then press Save again', 'err');
+    notify(); return;
+  }
   await persistSyl();
   await saveToFileClick();
 }
@@ -2570,5 +2579,9 @@ export async function init() {
       applyCharts, applyStudents, SYLLABI, DEFAULT_LAYOUTS };
     window.__fileFormatForTests = FMT;
     window.__fileStoreForTests = FS;
+    /* Playwright cannot drive the OS file picker, so smoke.mjs injects a stub
+       handle to exercise the save path — including the permission refusal that
+       made Save appear dead after opening a file. */
+    window.__setFileHandleForTests = h => { fileHandle = h; openFileName = h ? h.name : null; notify(); };
   }
 }

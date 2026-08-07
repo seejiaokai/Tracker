@@ -200,6 +200,44 @@ ok('the students tick-box starts unticked', !(await pg.isChecked('#optStudents')
 ok('no student-data warning shows with no file open',
   await pg.locator('#fileHasStudents').count() === 0);
 
+/* ---- Save still works after opening a file ----
+   Opening grants read only; saving must ask for write, and the browser only
+   allows that question while the click is live. Doing other work first spent
+   the click, the request threw uncaught, and the button appeared dead. */
+const afterOpen = await pg.evaluate(async () => {
+  const written = [];
+  let asked = 0, perm = 'prompt';
+  window.__setFileHandleForTests({
+    name: 'my-syllabus.json',
+    queryPermission: async () => perm,
+    requestPermission: async () => { asked++; perm = 'granted'; return perm; },
+    createWritable: async () => ({ write: t => { written.push(t); }, close: async () => {} }),
+  });
+  document.getElementById('saveChanges').click();
+  await new Promise(r => setTimeout(r, 1500));
+  return { asked, wrote: written.length, status: document.getElementById('saveStat').textContent };
+});
+ok('Save asks for write permission once a file is open', afterOpen.asked === 1, `asked ${afterOpen.asked}x`);
+ok('Save actually writes the file after opening one', afterOpen.wrote === 1,
+  `${afterOpen.wrote} writes, status: ${afterOpen.status}`);
+
+const refused = await pg.evaluate(async () => {
+  const written = [];
+  window.__setFileHandleForTests({
+    name: 'my-syllabus.json',
+    queryPermission: async () => 'prompt',
+    /* what the browser does when the click has already expired */
+    requestPermission: async () => { throw new DOMException('user activation is required', 'SecurityError'); },
+    createWritable: async () => ({ write: t => { written.push(t); }, close: async () => {} }),
+  });
+  document.getElementById('saveChanges').click();
+  await new Promise(r => setTimeout(r, 1500));
+  return { wrote: written.length, status: document.getElementById('saveStat').textContent };
+});
+ok('a refused write permission is reported, not swallowed',
+  refused.wrote === 0 && /not saved/i.test(refused.status), `status: ${refused.status}`);
+await pg.evaluate(() => window.__setFileHandleForTests(null));
+
 /* ---- writing charts back never disturbs people ---- */
 const applied = await pg.evaluate(async () => {
   const t = window.__coreForTests; if (!t) return null;
