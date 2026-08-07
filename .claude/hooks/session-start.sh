@@ -25,4 +25,18 @@ for c in "${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}/chromium" \
   fi
 done
 
+# The Superpowers plugin is declared in .claude/settings.json, but a plugin from
+# a GitHub marketplace is *declared*, not installed — and this image starts with
+# an empty ~/.claude every session, so the clone has to be re-fetched here.
+# Both commands are no-ops once it is present, and neither may break startup.
+if ! claude plugin list 2>/dev/null | grep -q 'superpowers@superpowers-marketplace'; then
+  claude plugin marketplace add obra/superpowers-marketplace --scope project >/dev/null 2>&1 || true
+  claude plugin install superpowers@superpowers-marketplace --scope project >/dev/null 2>&1 || true
+fi
+if claude plugin list 2>/dev/null | grep -q 'superpowers@superpowers-marketplace'; then
+  echo "superpowers: ready"
+else
+  echo "superpowers: NOT installed — run 'claude plugin install superpowers@superpowers-marketplace --scope project'"
+fi
+
 echo "ready: 'npm run smoke' (local build) · 'npm run live' (deployed site)"
