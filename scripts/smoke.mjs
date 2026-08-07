@@ -156,6 +156,124 @@ ok('clicking a ball opens the grading popup', await pg.evaluate(() => {
   return !!(p && getComputedStyle(p).display !== 'none' && p.offsetWidth);
 }));
 
+/* ---- reading state out for the user's file ---- */
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+const snapCover = await pg.evaluate(async () => {
+  const t = window.__coreForTests; if (!t) return null;
+  const s = await t.layoutSnapshotFor('2026', t.SYLLABI['2026']);
+  return Object.keys(s).filter(k => !k.startsWith('__')).length;
+});
+ok('layout snapshot covers every event, not only moved ones',
+  snapCover !== null && snapCover > 200, `${snapCover} positions`);
+
+const collected = await pg.evaluate(async () => {
+  const t = window.__coreForTests; if (!t) return null;
+  return { charts: await t.collectCharts(['2026']), students: await t.collectStudents() };
+});
+ok('collected charts carry the syllabus and its layout',
+  !!collected && collected.charts.order[0] === '2026'
+  && collected.charts.syllabi['2026'].length > 200
+  && Object.keys(collected.charts.layouts['2026']).length > 200);
+ok('collected charts name nobody',
+  !!collected && !JSON.stringify(collected.charts).includes('STUDENT '));
+ok('collected students carry the roster',
+  !!collected && JSON.stringify(collected.students).includes('STUDENT '));
+
+/* ---- reaching the user's own files ---- */
+const fsCaps = await pg.evaluate(() => ({
+  hasModule: !!window.__fileStoreForTests,
+  canWrite: window.__fileStoreForTests ? window.__fileStoreForTests.canWriteInPlace() : null,
+  secure: window.isSecureContext,
+}));
+ok('the file-access wrapper is reachable', fsCaps.hasModule);
+ok('this browser can write back into the same file', fsCaps.canWrite === true);
+ok('the page is a secure context, which the file pickers require', fsCaps.secure === true);
+
+/* ---- the Open and Save controls ---- */
+ok('the Open button exists', await pg.locator('#openFileBtn').count() === 1);
+ok('there is exactly one Save changes button', await pg.locator('#saveChanges').count() === 1
+  && await pg.locator('#saveFileBtn').count() === 0);
+ok('the toolbar says when no file is open',
+  (await pg.textContent('#openFileName')).includes('no file open'));
+ok('the charts tick-box starts ticked', await pg.isChecked('#optCharts'));
+ok('the students tick-box starts unticked', !(await pg.isChecked('#optStudents')));
+ok('no student-data warning shows with no file open',
+  await pg.locator('#fileHasStudents').count() === 0);
+
+/* ---- writing charts back never disturbs people ---- */
+const applied = await pg.evaluate(async () => {
+  const t = window.__coreForTests; if (!t) return null;
+  const grab = () => Object.fromEntries(
+    Object.keys(localStorage).filter(k => k.includes(':m:')).map(k => [k, localStorage.getItem(k)]));
+  const before = grab();
+  const charts = await t.collectCharts(['2026']);
+  charts.syllabi['2026'] = charts.syllabi['2026'].slice(0, 5);   /* a much smaller chart */
+  await t.applyCharts(charts, { names: ['2026'], mode: 'replace', rename: null });
+  return { same: JSON.stringify(before) === JSON.stringify(grab()),
+           count: JSON.parse(localStorage['ocu:v3:master:syls'])['2026'].length };
+});
+ok('replacing a syllabus writes the new chart', !!applied && applied.count === 5,
+  applied ? `${applied.count} events` : 'no result');
+ok('replacing a syllabus leaves every mark untouched', !!applied && applied.same);
+
+/* The check above would still pass if applyCharts rewrote roster keys with
+   identical values, so watch the writes themselves. */
+const noPeople = await pg.evaluate(async () => {
+  const t = window.__coreForTests; if (!t) return null;
+  const written = [];
+  const realSet = Storage.prototype.setItem;
+  Storage.prototype.setItem = function (k, v) { written.push(k); return realSet.call(this, k, v); };
+  try { await t.applyCharts(await t.collectCharts(['2026']), { names: ['2026'], mode: 'replace', rename: null }); }
+  finally { Storage.prototype.setItem = realSet; }
+  return written.filter(k => /:m:|:d:|:roster/.test(k));
+});
+ok('applying charts writes no roster, mark or date key',
+  !!noPeople && noPeople.length === 0, (noPeople || []).slice(0, 3).join(', '));
+
+/* ---- writing students back ---- */
+const stApplied = await pg.evaluate(async () => {
+  const t = window.__coreForTests; if (!t) return null;
+  await t.applyStudents({ courses: ['SMOKE COURSE'], byCourse: { 'SMOKE COURSE': {
+    plan: { sylName: '2026' },
+    bySyllabus: { '2026': { roster: ['STUDENT Z'],
+      marks: { 'STUDENT Z': { 'ST-01': { g: 'dco', f: 3 } } },
+      dates: { 'STUDENT Z': { lastSyll: '2026-02-03', lastCurr: null } } } } } } });
+  return { roster: localStorage['ocu:v3:SMOKE COURSE:2026:roster'],
+           marks: localStorage['ocu:v3:SMOKE COURSE:2026:m:STUDENT Z'] };
+});
+ok('applying students writes the roster', !!stApplied && (stApplied.roster || '').includes('STUDENT Z'));
+ok('applying students writes marks and failure counts',
+  !!stApplied && (stApplied.marks || '').includes('"f":3'));
+
+/* ---- the whole round trip, minus the OS picker Playwright cannot drive ---- */
+const trip = await pg.evaluate(async () => {
+  const t = window.__coreForTests, F = window.__fileFormatForTests;
+  if (!t || !F) return null;
+  const meta = o => Object.keys(o || {}).filter(k => k.startsWith('__')).sort().join(',');
+  const before = await t.collectCharts(null);
+  const text = JSON.stringify(F.buildFile({ charts: before, students: null, savedAt: 'x' }), null, 2);
+  const { charts } = F.readFile(JSON.parse(text));
+  await t.applyCharts(charts, { names: null, mode: 'replace', rename: null });
+  const after = await t.collectCharts(null);
+  return {
+    identical: JSON.stringify(before) === JSON.stringify(after),
+    names: before.order.join(','),
+    metaBefore: before.order.map(n => meta(before.layouts[n])).join('|'),
+    metaAfter: after.order.map(n => meta(after.layouts[n])).join('|'),
+    hasPeople: text.includes('STUDENT '),
+  };
+});
+ok('a chart survives a full save-and-reopen unchanged',
+  !!trip && trip.identical, trip ? trip.names : 'no result');
+/* Comparing before against after is not enough on its own: both sides run
+   through the same code, so dropping the metadata entirely leaves them equal
+   and the check green. Assert it is actually THERE as well as unchanged. */
+ok('drawn lines, arrowheads and font sizes survive too',
+  !!trip && trip.metaBefore.includes('__edgeMeta') && trip.metaBefore.includes('__lines')
+  && trip.metaBefore === trip.metaAfter,
+  trip ? `${trip.metaBefore} vs ${trip.metaAfter}` : '');
+ok('the saved text names nobody when students are not ticked', !!trip && !trip.hasPeople);
+
 ok('no uncaught page errors', errs.length === 0, errs.slice(0, 2).join(' | '));
 ok('no unexpected failed requests', bad4xx.length === 0, [...new Set(bad4xx)].slice(0, 3).join(' | '));
 
@@ -413,6 +531,54 @@ for (const f of ['src/app/core.js', 'src/data/pristine.html', 'sample-data/OCU_s
 }
 ok('demo rosters use placeholder names only', rosterLeaks.length === 0,
   [...new Set(rosterLeaks)].slice(0, 4).join(' | '));
+
+/* ---- file format ---- */
+const FF = await import('../src/app/fileFormat.js');
+const envelope = FF.buildFile({ charts: null, students: null, savedAt: '2026-01-01T00:00:00.000Z' });
+ok('envelope names its format and version',
+  envelope.format === 'ocu-tracker' && envelope.version === 1);
+ok('envelope records that it holds nothing',
+  envelope.contains.charts === false && envelope.contains.students === false);
+let ffRejected = false;
+try { FF.readFile({ hello: 'world' }); } catch (_) { ffRejected = true; }
+ok('a file that is not ours is rejected, not half-read', ffRejected);
+
+const CHARTS_FIX = {
+  order: ['2026'],
+  syllabi: { '2026': [{ id: 'ST-01', type: 'acad', prereqs: [], seq: 0 }] },
+  layouts: { '2026': { 'ST-01': { x: 60, y: 60 }, __lines: [{ a: 1 }], __font: { __all: 9 } } },
+  eventInfo: { 'ST-01': { name: 'Squadron Welcome' } },
+};
+const STUDENTS_FIX = {
+  courses: ['26ABSG'],
+  byCourse: { '26ABSG': { plan: { sylName: '2026' }, bySyllabus: { '2026': {
+    roster: ['STUDENT A'], marks: { 'STUDENT A': { 'ST-01': { g: 'dco', f: 2 } } },
+    dates: { 'STUDENT A': { lastSyll: '2026-01-02', lastCurr: null } } } } } },
+};
+const ffBoth = FF.readFile(FF.buildFile({ charts: CHARTS_FIX, students: STUDENTS_FIX, savedAt: 'x' }));
+ok('charts survive the round trip intact', JSON.stringify(ffBoth.charts) === JSON.stringify(CHARTS_FIX));
+ok('students survive the round trip intact', JSON.stringify(ffBoth.students) === JSON.stringify(STUDENTS_FIX));
+
+const chartsOnly = FF.buildFile({ charts: CHARTS_FIX, students: null, savedAt: 'x' });
+ok('charts-only file says so', chartsOnly.contains.students === false);
+ok('charts-only file has no students key', !('students' in chartsOnly));
+ok('charts-only file names nobody', !JSON.stringify(chartsOnly).includes('STUDENT A'));
+ok('a name containing a colon still round-trips', (() => {
+  const odd = { courses: ['A:B'], byCourse: { 'A:B': { plan: {}, bySyllabus: { 'x:y': {
+    roster: ['LEE J: JR'], marks: {}, dates: {} } } } } };
+  return JSON.stringify(FF.readFile(FF.buildFile({ charts: null, students: odd, savedAt: 'x' })).students)
+    === JSON.stringify(odd);
+})());
+
+ok('a charts-only file is named plainly',
+  FF.suggestedFileName({ charts: true, students: false }, '2026-08-07T15:04:05.000Z')
+    === 'OCU-syllabus-2026-08-07.json');
+ok('a file with people in it says so in its name',
+  FF.suggestedFileName({ charts: true, students: true }, '2026-08-07T15:04:05.000Z')
+    === 'OCU-syllabus-WITH-STUDENTS-2026-08-07.json');
+ok('a students-only file also says so',
+  FF.suggestedFileName({ charts: false, students: true }, '2026-08-07T15:04:05.000Z')
+    === 'OCU-syllabus-WITH-STUDENTS-2026-08-07.json');
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 await b.close();

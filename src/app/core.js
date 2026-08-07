@@ -11,6 +11,8 @@ import { DEFAULT_LAYOUTS } from '../data/layouts.js';
 import { EVENT_INFO } from '../data/eventInfo.js';
 import { SEED_STATE, SEED_STAMP } from '../data/seedState.js';
 import { storage, flushNow, loadLatest, cloudButtonClick, setCloudSinks, getCloudCache, cloudCfg } from '../sync/cloud.js';
+import * as FMT from './fileFormat.js';
+import * as FS from './fileStore.js';
 import PRISTINE_HTML from '../data/pristine.html?raw';
 
 export { SYLLABI, SYL_NAMES, DEFAULT_SYL_NAME, DEFAULT_SYL_ORDER, DEFAULT_LAYOUTS, EVENT_INFO };
@@ -189,6 +191,27 @@ async function snapshotLayout(srcName) {
   if (layout && layout.__derived) out.__derived = JSON.parse(JSON.stringify(layout.__derived));
   return out;
 }
+/* Like snapshotLayout(), but for ANY syllabus: takes the event list rather than
+   reading the live SYL, so a file can carry syllabi that are not on screen. */
+export async function layoutSnapshotFor(name, events) {
+  const out = {};
+  let saved = null;
+  try { const r = await sGet(kLayoutFor(course, name)); if (r) saved = JSON.parse(r); } catch (_) {}
+  const own = DEFAULT_LAYOUTS[name] || null;
+  const live = (name === curSyl() && layout) ? layout : null;
+  const auto = (name === curSyl()) ? computeFlow().pos : {};
+  (events || []).forEach(e => {
+    const p = (live && live[e.id]) || (saved && saved[e.id]) || (own && own[e.id])
+      || auto[e.id] || { x: 60, y: 60 };
+    out[e.id] = { x: p.x, y: p.y };
+  });
+  for (const k of ['__edgeMeta', '__merges', '__unmerges', '__font', '__lines', '__derived']) {
+    const v = (live && live[k]) || (saved && saved[k]) || (own && own[k]);
+    if (v != null) out[k] = JSON.parse(JSON.stringify(v));
+  }
+  return out;
+}
+
 export let CUSTOMS = {};
 /* Built-ins can be renamed and deleted like any other syllabus. */
 export let SYL_HIDDEN = [], SYL_ALIAS = {}, SYL_TOMB = {};
@@ -1532,7 +1555,7 @@ function drawGuides() {
 function endDrag(ev) {
   if (!drag) return; const g = drag.g;
   g.removeEventListener('pointermove', onDrag); g.removeEventListener('pointerup', endDrag); g.removeEventListener('pointercancel', endDrag);
-  const moved = drag.moved; drag = null; alignGuides = []; flushDragPaint(); const gl = document.getElementById('bandLayer'); if (gl) gl.innerHTML = ''; perfOff(); if (moved) { saveLayout(); wireBoard(); }
+  const moved = drag.moved; drag = null; alignGuides = []; flushDragPaint(); const gl = document.getElementById('bandLayer'); if (gl) gl.innerHTML = ''; perfOff(); if (moved) { saveLayout(); markFileDirty(); wireBoard(); }
 }
 
 /* ---------- inline ball editor (text / colour / number) — state for <EditModal/> ---------- */
@@ -1938,7 +1961,7 @@ export async function saveSylText(text) {
 
 /* ---------- arrange mode, editor tools, duplicate & save changes ---------- */
 export let sylDirty = false;
-function markDirty() { sylDirty = true; notify(); }
+function markDirty() { sylDirty = true; markFileDirty(); notify(); }
 function clearDirty() { sylDirty = false; undoStack = []; notify(); }
 
 export async function persistSyl() {
@@ -2359,6 +2382,166 @@ async function reloadFromStore() {
   refreshCourses(); refreshSyl(); refreshActive(); renderBoard(); renderSide();
 }
 
+/* ---------- reading state out, for the user's file ----------
+   Two halves that never mix: charts draw the flow and name nobody; students
+   name and grade people and hold no chart. See
+   docs/superpowers/specs/2026-08-07-syllabus-file-design.md */
+
+/* Charts: everything that draws the flow. Never a person. */
+export async function collectCharts(names) {
+  const list = (names && names.length) ? names : orderedSylNames();
+  const syllabi = {}, layouts = {}, order = [];
+  for (const n of list) {
+    const src = sylSource(n); if (!src) continue;
+    order.push(n);
+    syllabi[n] = JSON.parse(JSON.stringify(src));
+    layouts[n] = await layoutSnapshotFor(n, syllabi[n]);
+  }
+  const ei = JSON.parse(JSON.stringify(EVENT_INFO));
+  for (const k in (eventInfo || {})) ei[k] = Object.assign({}, ei[k] || {}, eventInfo[k]);
+  return { order, syllabi, layouts, eventInfo: ei };
+}
+
+/* Students: everything that names or grades a person. Never a chart. */
+export async function collectStudents() {
+  const byCourse = {};
+  for (const c of COURSES) {
+    const bySyllabus = {};
+    for (const n of orderedSylNames()) {
+      const rRaw = await sGet(kRosterFor(c, n));
+      let roster = []; try { roster = rRaw ? JSON.parse(rRaw) : []; } catch (_) { roster = []; }
+      if (!roster.length) continue;
+      const marks = {}, dates = {};
+      for (const s of roster) {
+        const m = await sGet(kMarksFor(c, n, s)); if (m) { try { marks[s] = JSON.parse(m); } catch (_) {} }
+        const d = await sGet(kDatesFor(c, n, s)); if (d) { try { dates[s] = JSON.parse(d); } catch (_) {} }
+      }
+      bySyllabus[n] = { roster, marks, dates };
+    }
+    let planObj = {};
+    try { const p = await sGet(kPlan(c)); if (p) planObj = JSON.parse(p); } catch (_) {}
+    byCourse[c] = { plan: planObj, bySyllabus };
+  }
+  return { courses: COURSES.slice(), byCourse };
+}
+
+/* ---------- writing state back in, from the user's file ---------- */
+
+/* Charts only. Writes syllabus definitions, layouts and event info — and
+   nothing filed under a student. THE RULE: no roster, mark or date key may be
+   written here, so importing a chart can never disturb anyone's progress.
+   scripts/smoke.mjs pins that by watching every localStorage write. */
+export async function applyCharts(charts, opts) {
+  const o = opts || {};
+  const list = (o.names && o.names.length) ? o.names : (charts.order || Object.keys(charts.syllabi || {}));
+  const applied = [];
+  for (const src of list) {
+    const events = (charts.syllabi || {})[src];
+    if (!events) continue;
+    const target = (o.mode === 'add' && o.rename && o.rename.from === src) ? o.rename.to : src;
+    CUSTOMS[target] = JSON.parse(JSON.stringify(events));
+    const lay = (charts.layouts || {})[src];
+    if (lay) await sSet(kLayoutFor(course, target), JSON.stringify(lay));
+    if (SYL_TOMB[target]) delete SYL_TOMB[target];
+    if (SYL_HIDDEN.indexOf(target) >= 0) SYL_HIDDEN = SYL_HIDDEN.filter(n => n !== target);
+    if (!SYL_ORDER.includes(target)) SYL_ORDER.push(target);
+    applied.push(target);
+  }
+  await sSet(kSyls(course), JSON.stringify(CUSTOMS));
+  if (charts.eventInfo) {
+    for (const k in charts.eventInfo) eventInfo[k] = Object.assign({}, eventInfo[k] || {}, charts.eventInfo[k]);
+    await saveEventInfo();
+  }
+  await saveSylPrefs(); await saveSylOrder();
+  await loadCourse(course);
+  refreshSyl(); renderBoard(); renderSide();
+  return { applied };
+}
+
+/* People only. Never writes a syllabus or layout key. */
+export async function applyStudents(students) {
+  const courses = (students && students.courses) || [];
+  for (const c of courses) {
+    const cs = (students.byCourse || {})[c] || {};
+    if (cs.plan) await sSet(kPlan(c), JSON.stringify(cs.plan));
+    for (const n in (cs.bySyllabus || {})) {
+      const b = cs.bySyllabus[n];
+      await sSet(kRosterFor(c, n), JSON.stringify(b.roster || []));
+      for (const s in (b.marks || {})) await sSet(kMarksFor(c, n, s), JSON.stringify(b.marks[s]));
+      for (const s in (b.dates || {})) await sSet(kDatesFor(c, n, s), JSON.stringify(b.dates[s]));
+    }
+  }
+  if (courses.length) await sSet(kCourses, JSON.stringify(courses));
+  await reloadFromStore();
+  return { courses: courses.slice() };
+}
+
+/* ---------- the user's file: Open and Save changes ----------
+   Saving is manual on purpose, so the file always holds a version the user
+   chose. To make forgetting hard rather than silent, the Save button carries a
+   dot whenever there is unsaved work and closing the tab warns first. */
+export let openFileName = null, openFileHasStudents = false, fileDirty = false;
+export let saveOpts = { charts: true, students: false };
+let fileHandle = null;
+
+export function setSaveOpt(which, on) { saveOpts = { ...saveOpts, [which]: !!on }; notify(); }
+/* Called from markDirty() and from endDrag(): dragging a ball saves its own
+   position, so before this it never lit the Save button — an easy way to think
+   work was saved when the file had not been touched. */
+export function markFileDirty() { if (!fileDirty) { fileDirty = true; notify(); } }
+
+async function fileBody(opts, savedAt) {
+  return FMT.buildFile({
+    charts: opts.charts ? await collectCharts(null) : null,
+    students: opts.students ? await collectStudents() : null,
+    savedAt,
+  });
+}
+
+export async function openFileClick() {
+  if (!FS.canWriteInPlace()) { await uiAlert('This browser cannot open a file directly.\n\nUse Chrome or Edge.'); return; }
+  const picked = await FS.pickOpen();          /* no await before this — gesture */
+  if (!picked) return;
+  let obj; try { obj = JSON.parse(picked.text); } catch (_) { await uiAlert('That file is not readable as JSON.'); return; }
+  let info; try { info = FMT.describeFile(obj); } catch (e) { await uiAlert(e.message); return; }
+  const { charts, students } = FMT.readFile(obj);
+  if (charts) await applyCharts(charts, { names: null, mode: 'replace', rename: null });
+  if (students) await applyStudents(students);
+  fileHandle = picked.handle;
+  openFileName = picked.handle.name;
+  openFileHasStudents = info.students;
+  saveOpts = { charts: info.charts, students: info.students };
+  fileDirty = false;
+  setSaveStatus('opened ' + openFileName, 'ok'); notify();
+}
+
+/* One Save button, not two. It saves the syllabus into the browser as it always
+   did, and then writes your file — which is where the work really lives. */
+export async function saveChangesClick() {
+  await persistSyl();
+  await saveToFileClick();
+}
+
+export async function saveToFileClick() {
+  const savedAt = new Date().toISOString();
+  const name = FMT.suggestedFileName(saveOpts, savedAt);
+  if (!fileHandle) {
+    if (!FS.canWriteInPlace()) {
+      FS.downloadInstead(name, JSON.stringify(await fileBody(saveOpts, savedAt), null, 2));
+      setSaveStatus('downloaded a copy — this browser cannot save in place', 'ok');
+      fileDirty = false; notify(); return;
+    }
+    fileHandle = await FS.pickSave(name);      /* gesture-critical */
+    if (!fileHandle) return;
+  }
+  if (!await FS.ensureWritable(fileHandle)) {
+    setSaveStatus('not saved — permission to write your file was declined', 'err'); notify(); return;
+  }
+  await FS.writeTo(fileHandle, JSON.stringify(await fileBody(saveOpts, savedAt), null, 2));
+  openFileName = fileHandle.name; openFileHasStudents = !!saveOpts.students;
+  fileDirty = false; setSaveStatus('saved to ' + openFileName, 'ok'); notify();
+}
+
 /* ---------- init ---------- */
 export let ready = false;
 const cloudCfgFn = () => { try { return cloudCfg(); } catch (e) { return null; } };
@@ -2377,4 +2560,15 @@ export async function init() {
   await loadCourse(COURSES[0]); await loadEventInfo(); await loadSylOrder();
   ready = true;
   refreshCourses(); refreshSyl(); refreshActive(); renderBoard(); renderSide();
+  /* Unsaved work must not vanish quietly when the tab closes. */
+  if (typeof window !== 'undefined')
+    window.addEventListener('beforeunload', e => { if (fileDirty) { e.preventDefault(); e.returnValue = ''; } });
+  /* The board is rendered imperatively and this module exports nothing to the
+     page, so scripts/smoke.mjs has no other way to reach these. */
+  if (typeof window !== 'undefined') {
+    window.__coreForTests = { layoutSnapshotFor, collectCharts, collectStudents,
+      applyCharts, applyStudents, SYLLABI, DEFAULT_LAYOUTS };
+    window.__fileFormatForTests = FMT;
+    window.__fileStoreForTests = FS;
+  }
 }

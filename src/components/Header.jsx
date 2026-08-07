@@ -37,7 +37,7 @@ export default function Header() {
         <button className={'sm' + (core.arrangeMode ? ' primary' : '')} id="arrangeBtn" onClick={core.toggleArrange}>{core.arrangeMode ? '✓ Done' : '✎ Edit'}</button>
         <button className="sm" id="fitViewBtn" style={{ display: core.arrangeMode ? '' : 'none' }} title="Zoom to fit the whole chart" onClick={core.fitViewClick}>Fit</button>
         <button className="sm" id="resetLayout" style={{ display: core.arrangeMode ? '' : 'none' }} onClick={core.resetLayoutClick}>Reset layout</button>
-        <button className={'sm' + (core.sylDirty ? ' dirty' : '')} id="saveChanges" title="Save edits made to this syllabus" onClick={core.persistSyl}>{core.sylDirty ? '✓ Save changes ●' : '✓ Save changes'}</button>
+        <button className={'sm' + ((core.sylDirty || core.fileDirty) ? ' dirty' : '')} id="saveChanges" title="Save your work — the syllabus, and your file if one is open" onClick={core.saveChangesClick}>{(core.sylDirty || core.fileDirty) ? '✓ Save changes ●' : '✓ Save changes'}</button>
         <label className="sub" style={{ marginLeft: 8 }}>Syllabus{' '}
           <select id="sylSel" value={sylValue} onChange={e => core.switchSyllabus(e.target.value)}>
             {sylOptions.map(n => <option key={n} value={n}>{n + (core.CUSTOMS[n] ? ' ✎' : '')}</option>)}
@@ -55,6 +55,11 @@ export default function Header() {
             {core.roster.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         </label>
+        <button className="sm" id="openFileBtn" title="Open your syllabus file, or start a new one" onClick={core.openFileClick}>📁 Open</button>
+        <span className="sub" id="openFileName">{core.openFileName || 'no file open'}</span>
+        {core.openFileHasStudents ? <span className="sub" id="fileHasStudents">· contains student data</span> : null}
+        <label className="sub"><input type="checkbox" id="optCharts" checked={core.saveOpts.charts} onChange={e => core.setSaveOpt('charts', e.target.checked)} /> Charts</label>
+        <label className="sub"><input type="checkbox" id="optStudents" checked={core.saveOpts.students} onChange={e => core.setSaveOpt('students', e.target.checked)} /> Students &amp; courses</label>
         <button className="sm" id="cloudBtn" title={core.cloudBtn.title} onClick={core.cloudButtonClick}>{core.cloudBtn.text}</button>
         <button className="sm" id="loadLatestBtn" title="Pull the latest data from the cloud right now" onClick={() => core.loadLatest()}>⟳ Load latest</button>
         <button className="sm" id="saveBtn" title="Force-save now and write a timestamped backup" onClick={core.saveBackup}>💾 Save backup</button>
