@@ -120,10 +120,11 @@ was re-synced this session — keep it in step.**
 
 ## Environment
 
-- `https://seejiaokai.github.io` is **blocked** (403 to CONNECT). Only the user can change
-  that when creating the environment. Check with `curl -sS "$HTTPS_PROXY/__agentproxy/status"`
-  and read `recentRelayFailures`. `npm run smoke` is the substitute — say so plainly rather
-  than implying the live URL was checked.
+- `https://seejiaokai.github.io` is **reachable now** — the user changed the network policy.
+  `npm run live` opens the deployed site in a browser and screenshots it; **they have asked
+  for it to be used after every change and whenever chasing a bug.** It only shows what has
+  finished publishing, so: `npm run smoke` → push → wait for the Pages run → `npm run live`.
+  See `CLAUDE.md` for the two Chromium settings involved and how to diagnose a failure.
 - Pillow is not installed by default; `pip install Pillow` for image cropping/zooming.
 - A `SessionStart` hook installs deps and resolves Chromium, so `npm run smoke` works
   immediately.

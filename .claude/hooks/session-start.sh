@@ -25,4 +25,4 @@ for c in "${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}/chromium" \
   fi
 done
 
-echo "ready: run 'npm run smoke' for browser-driven live testing"
+echo "ready: 'npm run smoke' (local build) · 'npm run live' (deployed site)"

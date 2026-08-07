@@ -53,27 +53,36 @@ Prove a fix is real by confirming the test fails without it. Stash the change,
 watch the check go red, restore it, watch it go green. A test that never failed
 has demonstrated nothing.
 
-### The deployed site is usually unreachable from a session
-
-`https://seejiaokai.github.io/Tracker/` is normally blocked by the environment's
-egress policy — the proxy answers `403` to `CONNECT`, same as any non-allowlisted
-host. Confirm with:
+### Also check the deployed site — the user asked for this
 
 ```
-curl -sS "$HTTPS_PROXY/__agentproxy/status" | python3 -m json.tool
+npm run live                          # load the Pages site, health summary, screenshot
+npm run live -- --syllabus "2026"     # switch syllabus first
 ```
 
-(Use `$HTTPS_PROXY` — the port changes between sessions, so a hardcoded one
-will just fail to connect and tell you nothing.)
+**The user wants the live site checked after every change and whenever hunting a
+bug.** It shows only what has finished publishing, so the order is: `npm run smoke`
+→ push → wait for the Pages run → `npm run live`. Say which one you actually ran;
+never let "checked live" stand for a local build.
 
-and look at `recentRelayFailures`. This is **not** fixable from inside the
-container and must not be routed around. Only the user can change it, by
-choosing a network policy that allows `*.github.io` when creating the
-environment (https://code.claude.com/docs/en/claude-code-on-the-web).
+`scripts/live.mjs` sets the two things Chromium needs and does not get on its own.
+Any throwaway browser script that leaves the container needs both:
 
-Until then `npm run smoke` is the substitute: same commit, same build flags,
-same base path, so it is the deployed artifact in everything but hostname.
-Say so plainly rather than implying the live URL was checked.
+| Setting | Without it |
+|---|---|
+| `proxy: { server: process.env.HTTPS_PROXY }` | `ERR_CERT_AUTHORITY_INVALID` |
+| `args: ['--ssl-version-max=tls1.2']` | `ERR_CONNECTION_RESET` — the proxy resets Chromium's TLS 1.3 handshake |
+
+Certificate verification stays on; never reach for `--ignore-certificate-errors`.
+Hosts the proxy intercepts with its own certificate (`github.com`, not `*.github.io`)
+additionally need its CA in Chromium's own store — `apt-get install -y libnss3-tools`
+then `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n ccr -i /root/.ccr/agent-proxy-ca.crt`.
+
+A `403` on `CONNECT` instead means the environment's network policy no longer allows
+`*.github.io`; only the user can change that, when creating the environment
+(https://code.claude.com/docs/en/claude-code-on-the-web). Diagnose with
+`curl -sS "$HTTPS_PROXY/__agentproxy/status"` and read `recentRelayFailures`
+(use `$HTTPS_PROXY`; the port changes every session).
 
 ## Architecture
 
