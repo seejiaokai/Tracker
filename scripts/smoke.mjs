@@ -194,6 +194,35 @@ const wrong = Object.entries(CHART_2026).filter(([id, want]) =>
 ok('2026 prereqs match the course map', wrong.length === 0,
   wrong.map(([id]) => `${id}=[${(by26[id]?.prereqs || []).join(',')}]`).join(' | '));
 
+/* A/G - A/A has its OWN ten-page map (images 20-29). Reading it into 2026 by
+   mistake is what broke that chart, so these pin the pairs the map draws in an
+   order the app had reversed, plus the page B-32 tail that was never entered. */
+const CHART_AGAA = {
+  'TI(S)-3': ['TI(S)-2'], 'DCA(S)-1': ['TI(S)-3'],
+  'TI-2': ['LASDT-3', 'TI(S)-3'], 'TI-3': ['TI-2', 'AAM-14'], 'DCA-1': ['TI-3', 'DCA(S)-1'],
+  'TI(S)-1': ['ACM(S)-2', 'ST-12', 'AAM-12'], 'AAM-10': ['ST-10 ACM'], 'AAM-11': ['ST-10 ACM'],
+  'NTR(S)-1': ['ST-14', 'AGS-08', 'NVG-LAB'], 'NTR-1': ['SA-4', 'NTR(S)-1'], 'SAN-1': ['SA(S)-7'],
+  'SAT(S)-1': ['ST-15', 'DCA(S)-1'], 'SAT-1': ['DCA-1', 'SAT(S)-2'],
+  'SATN-1': ['SAT(S)-1', 'NTR-2', 'SAN-1'], 'ST-18': ['SAT-2', 'SATN-1', 'DAAR/NAAR'],
+};
+const byAG = Object.fromEntries(SYLLABI['A/G - A/A 2026'].map(e => [e.id, e]));
+const wrongAG = Object.entries(CHART_AGAA).filter(([id, want]) =>
+  JSON.stringify((byAG[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+ok('A/G - A/A prereqs match its own course map', wrongAG.length === 0,
+  wrongAG.map(([id]) => `${id}=[${(byAG[id]?.prereqs || []).join(',')}]`).join(' | '));
+
+/* Each syllabus should funnel to one final event. A second endpoint means
+   something is dangling off the end of the chart, which is how the missing
+   B-32 tail showed up: A/G - A/A stopped dead at TI-3. */
+const ENDPOINTS = { '2026': 1, 'A/G - A/A 2026': 1, 'Tx 2026': 2, 'Tx 2024': 2, '2024': 6 };
+const ends = [];
+for (const [name, syl] of Object.entries(SYLLABI)) {
+  const used = new Set(syl.flatMap(e => e.prereqs || []));
+  const tail = syl.filter(e => !used.has(e.id)).map(e => e.id);
+  if (tail.length !== ENDPOINTS[name]) ends.push(`${name}: ${tail.length} (${tail.join(', ')})`);
+}
+ok('each syllabus ends where it should', ends.length === 0, ends.join(' | '));
+
 /* The layouts carry x/y only, so a prereq edit silently drags an arrow across
    the whole board — which is exactly how the last rebuild shipped looking like
    spaghetti. Any link far longer than a normal one means the reading and the
@@ -204,7 +233,7 @@ const SPAN_LIMIT = 1000;
    in the user's own charts. Tx 2026 / Tx 2024 / A/G - A/A 2026 still carry the
    LASDT->SA links that made 2026 look like spaghetti, so they are worth a look
    too — but changing them is a separate, confirmed-with-the-user job. */
-const SPAN_BASELINE = { '2024': 0, '2026': 2, 'Tx 2026': 3, 'A/G - A/A 2026': 7, 'Tx 2024': 3 };
+const SPAN_BASELINE = { '2024': 0, '2026': 2, 'Tx 2026': 3, 'A/G - A/A 2026': 8, 'Tx 2024': 3 };
 const stretched = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const L = DEFAULT_LAYOUTS[name]; if (!L) continue;
