@@ -323,6 +323,18 @@ ok('applying students writes the roster', !!stApplied && (stApplied.roster || ''
 ok('applying students writes marks and failure counts',
   !!stApplied && (stApplied.marks || '').includes('"f":3'));
 
+/* ---- an app holding no charts of its own must still start ----
+   Plan 9 empties syllabi.js. Before this, DEFAULT_SYLLABUS was undefined and
+   JSON.parse(JSON.stringify(undefined)) threw inside loadCourse, aborting it
+   half-way: the board looked alive but the syllabus list held one entry. An
+   empty board is the correct state — the user simply has not opened a file. */
+const emptySource = await pg.evaluate(async () => {
+  const t = window.__coreForTests;
+  try { return { ok: Array.isArray(JSON.parse(JSON.stringify(t.SYLLABI['2026']))) }; }
+  catch (e) { return { ok: false, err: e.message }; }
+});
+ok('a syllabus source round-trips through JSON', emptySource.ok, emptySource.err || '');
+
 /* ---- the whole round trip, minus the OS picker Playwright cannot drive ---- */
 const trip = await pg.evaluate(async () => {
   const t = window.__coreForTests, F = window.__fileFormatForTests;
