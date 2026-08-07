@@ -236,6 +236,41 @@ const refused = await pg.evaluate(async () => {
 });
 ok('a refused write permission is reported, not swallowed',
   refused.wrote === 0 && /not saved/i.test(refused.status), `status: ${refused.status}`);
+
+/* A write that silently does not land is the worst case: the file may be the
+   user's only copy, so "saved" must never appear over a stale file. */
+const dropped = await pg.evaluate(async () => {
+  window.__setFileHandleForTests({
+    name: 'my-syllabus.json',
+    queryPermission: async () => 'granted',
+    requestPermission: async () => 'granted',
+    createWritable: async () => ({ write: () => {}, close: async () => {} }),  /* writes nothing */
+    getFile: async () => ({ size: 0 }),                                        /* file stays empty */
+  });
+  document.getElementById('saveChanges').click();
+  await new Promise(r => setTimeout(r, 1500));
+  return document.getElementById('saveStat').textContent;
+});
+ok('a write that does not land is reported, never as success',
+  /NOT SAVED/.test(dropped), `status: ${dropped}`);
+
+const good = await pg.evaluate(async () => {
+  let stored = '';
+  window.__setFileHandleForTests({
+    name: 'my-syllabus.json',
+    queryPermission: async () => 'granted',
+    requestPermission: async () => 'granted',
+    createWritable: async () => ({ write: t => { stored = t; }, close: async () => {} }),
+    getFile: async () => ({ size: new Blob([stored]).size }),
+  });
+  document.getElementById('saveChanges').click();
+  await new Promise(r => setTimeout(r, 1500));
+  const el = document.getElementById('lastSaved');
+  return { note: el ? el.textContent : '', bytes: stored.length };
+});
+ok('a real save shows its size and the time on the toolbar',
+  /saved \d+ KB at /.test(good.note), `note: "${good.note}"`);
+ok('a real save writes the whole file', good.bytes > 10000, `${good.bytes} bytes`);
 await pg.evaluate(() => window.__setFileHandleForTests(null));
 
 /* ---- writing charts back never disturbs people ---- */

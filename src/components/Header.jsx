@@ -57,6 +57,7 @@ export default function Header() {
         </label>
         <button className="sm" id="openFileBtn" title="Open your syllabus file, or start a new one" onClick={core.openFileClick}>📁 Open</button>
         <span className="sub" id="openFileName">{core.openFileName || 'no file open'}</span>
+        {core.lastSavedAt ? <span className="sub" id="lastSaved">· {core.lastSavedAt}</span> : null}
         {core.openFileHasStudents ? <span className="sub" id="fileHasStudents">· contains student data</span> : null}
         <label className="sub"><input type="checkbox" id="optCharts" checked={core.saveOpts.charts} onChange={e => core.setSaveOpt('charts', e.target.checked)} /> Charts</label>
         <label className="sub"><input type="checkbox" id="optStudents" checked={core.saveOpts.students} onChange={e => core.setSaveOpt('students', e.target.checked)} /> Students &amp; courses</label>

@@ -2480,7 +2480,7 @@ export async function applyStudents(students) {
    Saving is manual on purpose, so the file always holds a version the user
    chose. To make forgetting hard rather than silent, the Save button carries a
    dot whenever there is unsaved work and closing the tab warns first. */
-export let openFileName = null, openFileHasStudents = false, fileDirty = false;
+export let openFileName = null, openFileHasStudents = false, fileDirty = false, lastSavedAt = null;
 export let saveOpts = { charts: true, students: false };
 let fileHandle = null;
 
@@ -2502,6 +2502,7 @@ export async function openFileClick() {
   if (!FS.canWriteInPlace()) { await uiAlert('This browser cannot open a file directly.\n\nUse Chrome or Edge.'); return; }
   const picked = await FS.pickOpen();          /* no await before this — gesture */
   if (!picked) return;
+  lastSavedAt = null;
   let obj; try { obj = JSON.parse(picked.text); } catch (_) { await uiAlert('That file is not readable as JSON.'); return; }
   let info; try { info = FMT.describeFile(obj); } catch (e) { await uiAlert(e.message); return; }
   const { charts, students } = FMT.readFile(obj);
@@ -2546,9 +2547,24 @@ export async function saveToFileClick() {
   if (!await FS.ensureWritable(fileHandle)) {
     setSaveStatus('not saved — permission to write your file was declined', 'err'); notify(); return;
   }
-  await FS.writeTo(fileHandle, JSON.stringify(await fileBody(saveOpts, savedAt), null, 2));
+  /* Any failure here must be loud. This file may be the user's only copy, so
+     reporting success when nothing was written is the worst thing the app can
+     do — worse than crashing, because they would never know to try again. */
+  const text = JSON.stringify(await fileBody(saveOpts, savedAt), null, 2);
+  try {
+    await FS.writeTo(fileHandle, text);
+  } catch (err) {
+    fileDirty = true; lastSavedAt = null;
+    setSaveStatus('NOT SAVED — ' + ((err && err.message) || err) + ' — try Save again', 'err');
+    notify(); return;
+  }
   openFileName = fileHandle.name; openFileHasStudents = !!saveOpts.students;
-  fileDirty = false; setSaveStatus('saved to ' + openFileName, 'ok'); notify();
+  fileDirty = false;
+  /* The shared status widget rewrites every 'ok' message to a bare "saved", so
+     the proof that a real write happened goes next to the file name instead. */
+  const kb = Math.round(new Blob([text]).size / 1024);
+  lastSavedAt = `saved ${kb} KB at ${new Date().toLocaleTimeString()}`;
+  setSaveStatus('', 'ok'); notify();
 }
 
 /* ---------- init ---------- */
