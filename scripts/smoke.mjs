@@ -1037,6 +1037,53 @@ ok('every event on the A/G - A/A map exists in that syllabus', agMissing.length 
 ok('every prerequisite on the A/G - A/A map matches that syllabus', agWrong.length === 0,
   agWrong.slice(0, 6).join(' | '));
 
+/* Tx 2026 is the SHORT conversion. The document is explicit that "Both Long and
+   Short Conversion course will undergo the same academics requirement", and the
+   hours agree: 231.5 academic hours on both tracks. Device hours do NOT (74.5 vs
+   71) and neither does flying (39 vs 31 sorties), so the sim set and the flight
+   list legitimately differ — but every academic must line up with 2026, whose
+   own links are now pinned against the map above.
+
+   Tx had fourteen that did not, including the whole AAM-06..AAM-10 chain sitting
+   empty and AGR-01, an academic, waiting on TI-2, a flight. */
+const TX_ACAD_EXCEPT = new Set([
+  /* Ends the course, so it names the flights Tx does not fly. */
+  'ST-18',
+]);
+const full26 = Object.fromEntries(SYLLABI['2026'].map(e => [e.id, e]));
+const txAcadWrong = [];
+for (const e of SYLLABI['Tx 2026']) {
+  if (e.type !== 'acad' || TX_ACAD_EXCEPT.has(e.id)) continue;
+  const want = full26[e.id] && (full26[e.id].prereqs || []);
+  if (!want) continue;
+  const have = (e.prereqs || []).slice().sort();
+  if (JSON.stringify(have) !== JSON.stringify([...want].sort()))
+    txAcadWrong.push(`${e.id}: tx=[${have.join(',')}] 2026=[${want.join(',')}]`);
+}
+ok('Tx academics match 2026, as the document says they must', txAcadWrong.length === 0,
+  `${txAcadWrong.length}: ` + txAcadWrong.slice(0, 5).join(' | '));
+
+/* Sims Tx does share with 2026 must be joined the same way. Tx keeps its own
+   entries for the two the short course drops (DCA(S)-1, SAT(S)-2). */
+const TX_SIMS = {
+  'ACM(S)-1': ['AAM-11', 'LASDT(S)-1'],
+  /* The SA(S)-2 -> -3 -> -4 -> -5 chain the user confirmed twice. It was intact
+     in 2026 and in A/G - A/A but broken here, which would let a Tx student fly a
+     sim out of order — the exact fault AGAA_SIM_CHAIN guards elsewhere. */
+  'SA(S)-3': ['AGW-02', 'SA(S)-2'],
+  'SA(S)-5': ['IAT-12', 'SA(S)-4'],
+  'SAT(S)-1': ['SA(S)-7', 'ST-15'],
+};
+const txById = Object.fromEntries(SYLLABI['Tx 2026'].map(e => [e.id, e]));
+const txSimWrong = Object.entries(TX_SIMS).filter(([id, want]) =>
+  JSON.stringify((txById[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+ok('Tx shares 2026\'s simulator ordering', txSimWrong.length === 0,
+  txSimWrong.map(([id]) => `${id}=[${(txById[id]?.prereqs || []).join(',')}]`).join(' | '));
+
+/* NTR-1 waits on SA-4 in the 2026 map AND in the short course's own table. */
+ok('Tx NTR-1 waits for SA-4', JSON.stringify((txById['NTR-1']?.prereqs || []).slice().sort())
+  === JSON.stringify(['NTR(S)-1', 'SA-4']), `[${(txById['NTR-1']?.prereqs || []).join(',')}]`);
+
 /* A/G - A/A has its OWN ten-page map (images 20-29). Reading it into 2026 by
    mistake is what broke that chart, so these pin the pairs the map draws in an
    order the app had reversed, plus the page B-32 tail that was never entered. */
@@ -1131,7 +1178,13 @@ ok('A/G - A/A prereqs match its own course map', wrongAG.length === 0,
 /* Each syllabus should funnel to one final event. A second endpoint means
    something is dangling off the end of the chart, which is how the missing
    B-32 tail showed up: A/G - A/A stopped dead at TI-3. */
-const ENDPOINTS = { '2026': 1, 'A/G - A/A 2026': 1, 'Tx 2026': 2, 'Tx 2024': 2, '2024': 6 };
+/* Tx 2026 went 2 -> 3. AGR-01 is an academic and was waiting on TI-2, a flight;
+   2026 and the map both have it waiting on T-10, so it was corrected — which
+   left TI-2 dangling beside TI-1. Both TI sorties now gate nothing in the short
+   course, because the events that consumed them (TI-3, DCA-1) are cut and its
+   own table hangs SA-1 off DCA-1. Nothing unlocks early; the TI sorties simply
+   lead nowhere. Reconnecting them is a syllabus decision for the user. */
+const ENDPOINTS = { '2026': 1, 'A/G - A/A 2026': 1, 'Tx 2026': 3, 'Tx 2024': 2, '2024': 6 };
 const ends = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const used = new Set(syl.flatMap(e => e.prereqs || []));
@@ -1158,7 +1211,10 @@ const SPAN_LIMIT = 1000;
    and the DAAR-1->DAAR-2 spine (5428px). The spine is long by design — it mirrors A/G - A/A,
    where the same chain runs down the far-left column, and the map itself draws DAAR as a
    full-height spine across eight pages. */
-const SPAN_BASELINE = { '2024': 0, '2026': 5, 'Tx 2026': 3, 'A/G - A/A 2026': 10, 'Tx 2024': 3 };
+/* Tx 2026 went 3 -> 4 with the same AGR-01 correction: T-10 and AGR-01 sit far
+   apart in that layout, so the right link draws a 2300px arrow. Link right,
+   routing ugly — recorded, not hidden. */
+const SPAN_BASELINE = { '2024': 0, '2026': 5, 'Tx 2026': 4, 'A/G - A/A 2026': 10, 'Tx 2024': 3 };
 const stretched = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const L = DEFAULT_LAYOUTS[name]; if (!L) continue;
