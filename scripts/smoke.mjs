@@ -197,6 +197,20 @@ for (const [name, lay] of Object.entries(LAYOUTS_FOR_LINES)) {
 }
 ok('no hand-drawn line ends in an arrowhead pointing at nothing', stray.length === 0, stray.join(', '));
 
+/* __derived records which prerequisite pairs the hand-drawn lines stand in for, so the
+   automatic arrow is suppressed. An entry naming a pair that is NOT a prerequisite means the
+   board draws a dependency the syllabus does not have — the picture and the event's own
+   details panel then disagree on screen. Worse, deriveLineLinks() re-reads __derived on the
+   next line edit and would write that phantom pair back into the syllabus for real. */
+const phantom = [];
+for (const [name, lay] of Object.entries(LAYOUTS_FOR_LINES)) {
+  const syl = SYLLABI[name]; if (!syl) continue;
+  const real = new Set();
+  syl.forEach(e => (e.prereqs || []).forEach(p => real.add(`${p}▸${e.id}`)));
+  (lay.__derived || []).forEach(k => { if (!real.has(k)) phantom.push(`${name}:${k}`); });
+}
+ok('no drawn link claims a prerequisite the syllabus does not have', phantom.length === 0, phantom.join(', '));
+
 /* 2026 links cross-checked against the Prerequisites row of the Jul 26 tables.
    Two extraction passes have now misread these off the flow-chart images, so
    they are pinned to the value the document states in words. */
