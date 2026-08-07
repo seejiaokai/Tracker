@@ -51,10 +51,13 @@ below it. **A semicircular hump = crossing, NOT connected; a plain corner/dot = 
 Magnify every junction before deciding — three readings flipped this session
 (`NTR(S)-1`/SS, `ST-15`/NN, `INT(S)-2`/AHC-1), and each would have been wrong at normal size.
 
-## What this session changed (3 commits, pushed, NOT merged)
+## What this session changed (merged and live)
 
-Branch `claude/new-session-mooytp`, at **`616f049`**. `main` is still at `a530661`.
-**Nothing is live** — the user's team still sees the flawed chart from the previous session.
+`main` and `claude/new-session-mooytp` are both at **`3c046f1`**, identical, clean. The
+user asked for the merge at the end of the session; it fast-forwarded, and the push did
+trigger a Pages deploy on its own this time (run `31136036790`). **Check a run exists after
+any push — the previous session's merge push silently failed to start one** and had to be
+kicked off by hand with `actions_run_trigger` → `run_workflow` on `deploy.yml`, ref `main`.
 
 | Commit | What |
 |---|---|
