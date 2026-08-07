@@ -1175,14 +1175,31 @@ export function renderBoard() {
   applyView();
   wireBoard();
   hideDetailBubble();
+  fitPhoneWidth(svgW);
   applyFlowZoom();
   notify();   /* header event count etc. */
 }
 export let flowZoom = 1;
+let zoomIsMine = false;   /* the user has taken the zoom over; stop auto-fitting */
+
+/* A phone gets the chart scaled to its own width. At 100% an 880px chart on a
+   390px screen leaves 522px of sideways wander that the desktop does not have,
+   which is what makes scrolling straight down so awkward. Fitting the width
+   makes scrollWidth equal clientWidth, so the only direction left is down.
+   The zoom buttons still work — this is a starting point, not a lock. */
+const PHONE = 1050;
+function fitPhoneWidth(chartW) {
+  if (typeof window === 'undefined' || arrangeMode || zoomIsMine) return;
+  const board = document.getElementById('board'); if (!board || !chartW) return;
+  if (window.innerWidth > PHONE) { flowZoom = 1; return; }
+  const cs = getComputedStyle(board);
+  const avail = board.clientWidth - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0);
+  if (avail > 0) flowZoom = Math.min(1, Math.max(0.1, Math.floor((avail / chartW) * 100) / 100));
+}
 function applyFlowZoom() {
   const w = document.querySelector('#board .flowwrap'); if (w) w.style.zoom = arrangeMode ? 1 : flowZoom;
 }
-export function setFlowZoom(z) { flowZoom = z; applyFlowZoom(); notify(); }
+export function setFlowZoom(z) { zoomIsMine = true; flowZoom = z; applyFlowZoom(); notify(); }
 function wireBoard() {
   const svg = document.getElementById('flowSvg');
   document.querySelectorAll('#flowSvg .ball').forEach(g => {
@@ -2576,6 +2593,20 @@ export async function init() {
   /* Unsaved work must not vanish quietly when the tab closes. */
   if (typeof window !== 'undefined')
     window.addEventListener('beforeunload', e => { if (fileDirty) { e.preventDefault(); e.returnValue = ''; } });
+  /* Turning a phone sideways changes how much chart fits, so re-fit unless the
+     user has set the zoom themselves. */
+  if (typeof window !== 'undefined') {
+    let t = null;
+    window.addEventListener('resize', () => {
+      if (zoomIsMine || arrangeMode) return;
+      clearTimeout(t);
+      t = setTimeout(() => {
+        const svg = document.getElementById('flowSvg'); if (!svg) return;
+        fitPhoneWidth(parseFloat(svg.getAttribute('width')) || 0);
+        applyFlowZoom(); notify();
+      }, 120);
+    });
+  }
   /* The board is rendered imperatively and this module exports nothing to the
      page, so scripts/smoke.mjs has no other way to reach these. */
   if (typeof window !== 'undefined') {

@@ -647,6 +647,67 @@ await pg.click('#arrangeBtn'); await pg.waitForTimeout(300);
 await pg.setViewportSize({ width: 1500, height: 950 });
 await pg.waitForTimeout(300);
 
+/* ---- the phone ----
+   390x844. Two separate complaints: the chart wandered sideways because it is
+   880px wide on a 390px screen (522px of lateral freedom desktop does not
+   have), and the stats needed 30% zoom to photograph because everything above
+   the calendar is ~1500px tall in ~500px of screen. */
+await pg.reload({ waitUntil: 'networkidle' });
+await pg.waitForSelector('#flowSvg .ball');
+/* Pin the syllabus: earlier checks leave a small imported one selected, whose
+   chart happens to have a big empty gap at the bottom. That made the
+   scroll-room check pass without measuring anything. */
+await pg.selectOption('#sylSel', await pg.evaluate(() =>
+  [...document.querySelectorAll('#sylSel option')].find(o => o.textContent.startsWith('2026')).value));
+await pg.waitForTimeout(800);
+await pg.setViewportSize({ width: 390, height: 844 });
+await pg.waitForTimeout(900);
+
+const phoneFlow = await pg.evaluate(() => {
+  const bd = document.getElementById('board');
+  const wrap = document.querySelector('.flowwrap');
+  const z = parseFloat(getComputedStyle(wrap).zoom) || 1;
+  /* Room measured as the gap the board adds under the chart itself, not as the
+     distance to the lowest event: some charts happen to end with hundreds of
+     px of empty layout and that made this pass without measuring the fix. */
+  return {
+    clientW: bd.clientWidth, scrollW: bd.scrollWidth,
+    roomBelow: Math.round(bd.scrollHeight - wrap.offsetHeight * z),
+    zoom: z,
+  };
+});
+ok('on a phone the chart fits the screen width, so it only scrolls up and down',
+  phoneFlow.scrollW <= phoneFlow.clientW + 1,
+  `${phoneFlow.scrollW}px of chart in ${phoneFlow.clientW}px of screen`);
+ok('a phone can scroll well past the end of the chart, clear of the zoom control',
+  phoneFlow.roomBelow >= 130, `${phoneFlow.roomBelow}px of room under the chart`);
+
+/* Info tab: everything above the calendar has to fit without pinching. */
+await pg.click('.viewtabs button[data-view="info"]');
+await pg.waitForTimeout(600);
+const phoneStats = await pg.evaluate(() => {
+  const s = document.getElementById('side');
+  return {
+    scrollH: s.scrollHeight, clientH: s.clientHeight,
+    cards: [...s.querySelectorAll('.card')].map(c => ({
+      t: ((c.querySelector('h3') || {}).textContent || '').slice(0, 24),
+      h: Math.round(c.getBoundingClientRect().height),
+    })),
+  };
+});
+ok('every statistic fits on one phone screen, no pinching to photograph it',
+  phoneStats.scrollH <= phoneStats.clientH,
+  `${phoneStats.scrollH}px of stats in ${phoneStats.clientH}px of screen — `
+  + phoneStats.cards.map(c => `${c.t.trim()} ${c.h}`).join(', '));
+
+await pg.setViewportSize({ width: 1500, height: 950 });
+await pg.waitForTimeout(400);
+await pg.reload({ waitUntil: 'networkidle' });
+await pg.waitForSelector('#flowSvg .ball');
+await pg.waitForTimeout(400);
+ok('the desktop chart is still shown full size, not shrunk to fit',
+  Math.abs((await pg.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.flowwrap')).zoom) || 1)) - 1) < 0.01);
+
 ok('no uncaught page errors', errs.length === 0, errs.slice(0, 2).join(' | '));
 ok('no unexpected failed requests', bad4xx.length === 0, [...new Set(bad4xx)].slice(0, 3).join(' | '));
 

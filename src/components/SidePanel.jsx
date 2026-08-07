@@ -92,23 +92,25 @@ export default function SidePanel({ zoom }) {
 
   return (
     <div className={cls} id="side" ref={ref} style={style}>
-      <div className="card">
+      <div className="card c-students">
         <h3>Students <button className="sm" id="addStu" onClick={core.addStudent}>+ Add</button></h3>
         <div className="chips">
           {core.roster.map((r, i) => (
             <span key={r} className="chip"><b>{i + 1}</b> {r} <span className="x" data-rm={r} onClick={() => core.removeStudent(r)}>×</span></span>
           ))}
         </div>
-        <span dangerouslySetInnerHTML={{ __html: core.renderKeyBall() }} />
+        {/* Wrapped so the phone can shrink it — it is the tallest card there. */}
+        <div className="keyball" dangerouslySetInnerHTML={{ __html: core.renderKeyBall() }} />
       </div>
-      <div className="card">
-        <h3>Overall — {s}</h3>
+      <div className="card c-overall">
+        <h3>Overall <span className="who">— {s}</span></h3>
         <div className="big">
           <div className="num"><div className="v">{(st.totPct * 100).toFixed(1)}%</div><div className="l">Complete</div></div>
           <div className="num"><div className="v">{st.totDone}</div><div className="l">Done</div></div>
           <div className="num"><div className="v">{st.remaining}</div><div className="l">Remaining</div></div>
         </div>
         <div className="bar"><div style={{ width: (st.totPct * 100).toFixed(1) + '%' }}></div></div>
+        <div className="kvGrid">
         {core.BUCKETS.map(b => {
           const d = st.buckets[b.key];
           return (
@@ -118,9 +120,11 @@ export default function SidePanel({ zoom }) {
             </div>
           );
         })}
+        </div>
       </div>
-      <div className="card">
+      <div className="card c-next">
         <h3>Next event (flow-based)</h3>
+        <div className="kvGrid">
         {core.NEXT_CATS.map(c => {
           const opts = core.nextOfCat(s, c.pred);
           return (
@@ -137,17 +141,18 @@ export default function SidePanel({ zoom }) {
             </div>
           );
         })}
+        </div>
         <div className="mini" style={{ marginTop: 5 }}>Two chips = the flow branches; either can be flown next.</div>
       </div>
-      <div className="card">
-        <h3>Plannable now <span className="mini" style={{ fontWeight: 400 }}>(shows up to 5 rows)</span> — {s}</h3>
+      <div className="card c-plan">
+        <h3>Plannable now <span className="mini" style={{ fontWeight: 400 }}>(shows up to 5 rows)</span><span className="who"> — {s}</span></h3>
         <div className="chips">
           {near.length
             ? near.map(e => <span key={e.id} className="chip" style={{ borderColor: core.TYPE_COLOR[e.type] }}><b>{e.id}</b></span>)
             : <span className="mini">none within reach</span>}
         </div>
       </div>
-      <div className="card">
+      <div className="card wide c-curr">
         <h3>Currency &amp; flex</h3>
         <div className="curGrid">
           <div className="field"><label>Last Flown (Syllabus)</label><input type="date" id="lastSyll" value={core.dates[s].lastSyll || ''} onChange={e => core.setLastSyll(s, e.target.value)} /></div>
@@ -159,11 +164,13 @@ export default function SidePanel({ zoom }) {
           <div className="kv"><span>Days since syllabus</span><b>{dSyll == null ? '—' : dSyll + 'd'}</b></div>
           <div className="kv"><span>Days since currency</span><b>{dCurr == null ? '—' : dCurr + 'd'}{downDays ? <> <span className="mini">(−{downDays} down = {effCurr}d)</span></> : null}</b></div>
         </div>
-        <div className="flexbar" style={{ background: cur.color, marginTop: 8 }}>{cur.txt}</div>
-        <div className="flexbar" style={{ background: fx.color, marginTop: 6 }}>{fx.txt}</div>
+        <div className="flexPair">
+          <div className="flexbar" style={{ background: cur.color }}>{cur.txt}</div>
+          <div className="flexbar" style={{ background: fx.color }}>{fx.txt}</div>
+        </div>
         <div className="mini" style={{ marginTop: 5 }}>Landing currency = days since last currency (minus down days). Flex requirement uses days since last <b>syllabus</b> flight, so updating currency won’t change it.</div>
       </div>
-      <div className="card">
+      <div className="card wide c-pace">
         <h3>Pace &amp; expected end</h3>
         {/* Set pace takes the whole width; the two end dates share the row below.
             Three across needed 419px in a 301px panel and pushed End date B off
@@ -193,7 +200,7 @@ export default function SidePanel({ zoom }) {
         </div>
         <div className="mini" style={{ marginTop: 6 }}>Baseline 2 events/wk. Both end-date paces exclude lull periods below.</div>
       </div>
-      <div className="card">
+      <div className="card c-lull">
         <h3>Lull periods (course)</h3>
         <div className="chips" id="lullChips">
           {(core.plan.lulls || []).length

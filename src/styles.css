@@ -14,7 +14,10 @@
 body{margin:0;background:var(--bg);color:var(--ink);font:13.5px/1.45 "Segoe UI",Roboto,Arial,sans-serif;height:100vh;height:100dvh;overflow:hidden}
 /* The column has to live on #root: React mounts the header, the edit strip and
    the layout inside it, so a flex column on body would only ever lay out #root. */
-#root{display:flex;flex-direction:column;height:100%;min-height:0}
+/* min-width/max-width matter as much as the height: without them the scrollable
+   one-row header on a phone widens the whole column and every card with it. */
+#root{display:flex;flex-direction:column;height:100%;min-height:0;width:100%;max-width:100%;min-width:0;overflow:hidden}
+#root>*{min-width:0;max-width:100%}
 .restricted{background:#7a1414;color:#fff;text-align:center;font-weight:700;letter-spacing:3px;font-size:11px;padding:3px}
 header{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 header h1{font-size:16px;margin:0;letter-spacing:.5px}
@@ -40,7 +43,9 @@ button.sm{padding:3px 7px;font-size:11px}
  body.tab-info .board{display:none}
  body.tab-flow .side{display:none}
  body.tab-info .legend{display:none}
- body.tab-info .side{padding-bottom:48px}
+ /* Room to scroll the last event clear of the bottom edge and the zoom control,
+    which otherwise sits on top of it. */
+ .board{padding-bottom:170px}
 }
 #showAllPanel{position:fixed;z-index:81;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,94vw);max-height:88vh;display:none;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.6)}
 #showAllPanel.on{display:flex}
@@ -97,14 +102,7 @@ button.sm{padding:3px 7px;font-size:11px}
 @media(max-width:1050px){ body.tab-info #flowZoomCtl{display:none} }
 #detailBubble{position:fixed;z-index:66;display:none;max-width:260px;background:var(--panel);border:1px solid var(--accent);border-radius:9px;padding:9px 11px;font-size:12.5px;line-height:1.5;color:var(--ink);box-shadow:0 8px 26px rgba(0,0,0,.6);pointer-events:none}
 #detailBubble .dbId{font-weight:700;font-size:12px;letter-spacing:.4px;color:var(--accent);margin-bottom:3px}
-@media(max-width:1050px){
- #side.zoomed .curGrid{display:grid;grid-template-columns:1fr 1fr;column-gap:10px;row-gap:2px}
- #side.zoomed .curGrid .field{flex-direction:column;align-items:stretch;gap:1px;margin:2px 0}
- #side.zoomed .curGrid .field label{min-width:0}
- #side.zoomed .curGrid .field input{width:100%!important}
- #side.zoomed .curKv{display:grid;grid-template-columns:1fr 1fr;column-gap:12px}
- #side.zoomed .curKv .kv{border-bottom:0;padding:2px 0}
-}
+
 .phase{margin-bottom:16px}
 .phase h2{font-size:11px;text-transform:uppercase;letter-spacing:1.4px;color:var(--muted);margin:0 0 7px;border-bottom:1px solid var(--line);padding-bottom:3px}
 .row{display:flex;flex-wrap:wrap;gap:3px 1px;align-items:center}
@@ -142,6 +140,8 @@ svg.perf .edgehit{pointer-events:none}
 .big{display:flex;gap:8px;flex-wrap:wrap}.big .num{flex:1;min-width:60px;text-align:center;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:7px}
 .big .num .v{font-size:20px;font-weight:700}.big .num .l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
 .flexbar{padding:8px 10px;border-radius:8px;font-weight:700;color:#fff;text-align:center;font-size:13px}
+/* Stacked on the desktop, side by side on a phone. */
+.flexPair{display:grid;gap:6px;margin-top:8px}
 .opt2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
 /* Three date boxes across needed 419px in a 301px panel, putting End date B 84px
    off the right of the window. Set pace takes the full width; the two end dates
@@ -200,3 +200,111 @@ small.hint{color:var(--muted);font-size:11px}
 .menupanel label.sub{display:flex;align-items:center;gap:7px;padding:2px 4px}
 .menupanel .msep{height:1px;background:var(--line);margin:2px 0}
 .menupanel .mnote{font-size:11px;color:var(--muted);padding:2px 4px;line-height:1.5;overflow-wrap:anywhere}
+
+/* ---- phone: fit every statistic on one screen, no pinching to photograph ----
+   Everything above the calendar was ~1500px tall in ~500px of screen, so the
+   only way to see it was 30% zoom. These rules apply at phone width whether or
+   not the panel is zoomed; the two-across currency grid used to need .zoomed. */
+@media(max-width:1050px){
+ .curGrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:10px;row-gap:2px}
+ .curGrid .field{flex-direction:column;align-items:stretch;gap:1px;margin:2px 0}
+ .curGrid .field label{min-width:0}
+ .curGrid .field input{width:100%!important}
+ .curKv{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:12px}
+ .curKv .kv{border-bottom:0;padding:2px 0}
+ /* The student key-ball diagram is the single biggest card on the phone. */
+ .keyball svg{width:104px;height:88px}
+ /* Two columns. Density alone got 2133px down to 1458 against ~620px of screen;
+    only pairing the cards closes a gap that size. Cards holding date boxes span
+    both columns — a dd/mm/yyyy field needs ~124px and a column is ~183px. */
+ .side{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px;align-content:start;align-items:start}
+ /* Every card goes narrow and pairs off. Keeping the date-holding cards full
+    width left 1151px against 754 of screen; pairing Currency with Pace alone is
+    worth ~180 of that. A column is 183px and a compact dd/mm/yyyy needs ~124,
+    so the dates still fit — the inner two-across grids go back to one column. */
+ /* Short cards pair off two to a row; the two holding date boxes stay full
+    width, where their fields go two across instead of stacking four deep. A
+    183px column is too narrow for a dd/mm/yyyy field to sit beside anything. */
+ .card.wide{grid-column:1/-1}
+ .c-overall{order:1}.c-students{order:2}.c-next{order:3}.c-plan{order:4}
+ .c-curr{order:5}.c-pace{order:6}.c-lull{order:7}
+ .kvGrid,.curKv{grid-template-columns:minmax(0,1fr)}
+ .kvGrid .kv,.curKv .kv{border-bottom:0}
+ .flexPair{display:grid;gap:5px;margin-top:6px}
+ .side{font-size:11.5px}
+ input[type=date]{font-size:11px;padding:5px 3px}
+ .big{gap:4px}.big .num{padding:3px;min-width:0}
+ .keyball svg{width:78px;height:66px}
+ /* Headings that name the student, and the parenthetical hints, wrap onto two
+    and three lines in a 183px card. The student is named in the top bar. */
+ .card h3 .who,.card h3 .mini{display:none}
+ /* Three figures on one row, not stacked three deep: that alone was ~120px. */
+ .big{flex-wrap:nowrap}
+ .big .num .v{font-size:13.5px}.big .num .l{font-size:7.5px;letter-spacing:.2px}
+ /* Four date fields, compactly. */
+ .curGrid .field label{font-size:10px}
+ .curGrid .field{margin:1px 0}
+ .flexPair{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+ .flexbar{padding:4px 5px;font-size:10.5px;line-height:1.25}
+ /* Keep each row on one line so nothing wraps to double height. */
+ .c-next .kv>span:first-child{white-space:nowrap;font-size:10.5px}
+ .branch{padding:0 5px;margin:1px 2px 0 0;font-size:11px}
+ /* Explanatory notes are the first thing to go when the screen is this small;
+    they are direct children of a card, so inline .mini spans are untouched. */
+ .card>div.mini{display:none}
+ /* Tighter cards, headings and rows throughout. */
+ .side{padding:8px}
+ .card{padding:6px;margin-bottom:0}
+ /* Final squeeze to bring 867px of statistics inside 754px of screen. */
+ .card h3{margin:0 0 4px;font-size:10px}
+ .kv{padding:0;line-height:1.5}
+ .bar{margin:2px 0 5px;height:6px}
+ .paceGrid{gap:5px}
+ .paceGrid .o{padding:4px}
+ .paceGrid .o .t{margin-bottom:2px}
+ .paceRow .r,.opt2 .o .r{font-size:14px}
+ .curGrid{column-gap:8px}
+ .chip{padding:1px 6px;font-size:11px}
+ .keyball svg{width:58px;height:49px}
+ .keyball{line-height:0}
+ .card.wide .curKv{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+ /* Three pace boxes across fit here and not on the desktop panel: this card is
+    the full 373px of phone, where the desktop one is 301px. */
+ .card.wide .paceGrid{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .card.wide .paceGrid>.o:first-child{grid-column:auto}
+ .paceRow{flex-direction:column;align-items:flex-start;gap:0}
+ /* Headroom: at exactly the screen height a third student would start it
+    scrolling again. */
+ .kv{line-height:1.4}
+ .flexbar{padding:3px 4px}
+ .curGrid .field label{font-size:9.5px}
+ .chips{gap:3px}
+ .curGrid .field input{padding:4px 3px}
+ .big .num{padding:2px}.big .num .v{font-size:12.5px}
+ .side{padding:6px}
+ .viewtabs{padding:4px 8px;gap:5px}
+ .viewtabs button{padding:6px;font-size:12px}
+ .card h3{margin:0 0 6px}
+ .kv{padding:1px 0;font-size:12px}
+ .big .num{padding:4px}
+ .big .num .v{font-size:17px}
+ .flexbar{padding:5px 8px;font-size:12px}
+ .paceGrid .o{padding:6px}
+ .paceRow .r,.opt2 .o .r{font-size:15px}
+ .chips{gap:4px}.chip{padding:2px 7px}
+ /* Set on the phone from the calendar pop-up, so the panel copy is dead weight
+    on the screen where space is scarcest. */
+ #calCard{display:none}
+ /* The bar took 281px before a single statistic appeared, and still 175 after
+    tightening, because 10 controls wrap onto four rows in 390px. One row that
+    scrolls sideways is 44px whatever it holds — that is 130px of screen handed
+    back to the statistics. */
+ header{padding:5px 8px;gap:8px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+ header::-webkit-scrollbar{display:none}
+ header>div:first-child{display:none}
+ .controls{flex-wrap:nowrap;margin-left:0}
+ .controls>*{flex:0 0 auto}
+ .saveslot{min-width:0}
+ .menupanel{max-height:70vh;overflow:auto}
+ .legend{display:none}
+}

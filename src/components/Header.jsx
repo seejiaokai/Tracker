@@ -40,7 +40,7 @@ export default function Header() {
     <header>
       <div>
         <h1 id="courseTitle">{core.course || ''} PROGRESS TRACKER</h1>
-        <div className="sub">Multi-student · single platform · <span id="evCount">{core.SYL.length} events</span></div>
+        <div className="sub sub-strap">Multi-student · single platform · <span id="evCount">{core.SYL.length} events</span></div>
       </div>
       <div className="controls">
         <label className="sub">Course{' '}
