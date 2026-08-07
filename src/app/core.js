@@ -76,6 +76,9 @@ async function sSet(k, v) { mem[k] = v; setSaveStatus('', 'saving'); try { await
 export let COURSES = [], course = null, active = null;
 export let SYL = [], byid = {}, roster = [], marks = {}, dates = {}, plan = {};
 export let calView = new Date(); export let calMode = 'lastCurr';
+/* True while boot migrations and course switches are writing, so they do not
+   flag the user's file as having unsaved work. See touched(). */
+let loading = true;
 export let arrangeMode = false, layout = {}, drag = null, AUTO = {}, BORROW = null;
 /* ---- per-edge routing metadata layered on top of the prereq graph ---- */
 let edgeMeta = {}, merges = new Set(), unmerges = new Set(), selEdge = null, mergeFirst = null, selBalls = new Set(), redoStack = [], alignGuides = [];
@@ -292,6 +295,7 @@ async function migrateRosters(c) {
   } catch (_) {}
 }
 async function loadCourse(c) {
+  loading = true;
   course = c;
   const pr = await sGet(kPlan(c)); plan = pr ? JSON.parse(pr) : { lulls: [], mode: 'pace', epw: 2, target: null, sylName: DEFAULT_SYL_NAME, custom: false };
   if (!plan.sylName) plan.sylName = DEFAULT_SYL_NAME;
@@ -361,10 +365,20 @@ async function loadCourse(c) {
       await saveLayout();
     }
   }
+  loading = false;
 }
-async function saveSyl() { await sSet(kSyl(course), JSON.stringify(SYL)); }
-async function saveRoster() { await sSet(kRosterFor(course, plan.sylName), JSON.stringify(roster)); }
-async function savePlan() { await sSet(kPlan(course), JSON.stringify(plan)); }
+/* Every write of the user's own work goes through one of the four functions
+   below, so flagging the file unsaved here catches marking an event, a date, a
+   pace, a lull and a student alike — including anything added later. Doing it in
+   each caller instead is how marking a student came to leave the file clean:
+   Save changes wrote the file anyway, so nothing was lost while the button was
+   always on screen, but it never showed the unsaved dot and could not be hidden
+   safely. `loading` keeps boot-time migrations and course switches from
+   flagging work the user has not done. */
+function touched() { if (!loading) markFileDirty(); }
+async function saveSyl() { await sSet(kSyl(course), JSON.stringify(SYL)); touched(); }
+async function saveRoster() { await sSet(kRosterFor(course, plan.sylName), JSON.stringify(roster)); touched(); }
+async function savePlan() { await sSet(kPlan(course), JSON.stringify(plan)); touched(); }
 async function loadStudent() {
   marks = {}; dates = {};
   for (const s of roster) {
@@ -374,8 +388,8 @@ async function loadStudent() {
     dates[s] = d ? JSON.parse(d) : { lastSyll: null, lastCurr: null };
   }
 }
-async function saveMarks(s) { await sSet(kMarks(course, s), JSON.stringify(marks[s])); }
-async function saveDates(s) { await sSet(kDates(course, s), JSON.stringify(dates[s])); }
+async function saveMarks(s) { await sSet(kMarks(course, s), JSON.stringify(marks[s])); touched(); }
+async function saveDates(s) { await sSet(kDates(course, s), JSON.stringify(dates[s])); touched(); }
 
 /* ---------- in-page dialogs (promise-based, rendered by <DlgModal/>) ---------- */
 export let dlg = null; export let dlgSerial = 0;
@@ -2573,5 +2587,8 @@ export async function init() {
        handle to exercise the save path — including the permission refusal that
        made Save appear dead after opening a file. */
     window.__setFileHandleForTests = h => { fileHandle = h; openFileName = h ? h.name : null; notify(); };
+    /* Save changes is only on screen while there is unsaved work, so a test that
+       wants to press it has to put the app in that state first. */
+    window.__markFileDirtyForTests = () => markFileDirty();
   }
 }

@@ -97,8 +97,17 @@ const resetRow = async id => {
   await pg.locator('.saedit-btns button', { hasText: 'Cancel' }).click(); await pg.waitForTimeout(250);
 };
 
-await pg.click('#showAllBtn');
-await pg.waitForSelector('#showAllPanel.on');
+/* Show All lives in the View menu now; open it first. */
+const openShowAll = async () => {
+  await pg.click('#viewMenuBtn'); await pg.waitForTimeout(120);
+  await pg.click('#showAllBtn'); await pg.waitForSelector('#showAllPanel.on');
+};
+/* Same for the grouped actions: open the owning menu, then press the button. */
+const viaMenu = async (menu, item) => {
+  await pg.click(`#${menu}MenuBtn`); await pg.waitForTimeout(120);
+  await pg.click(item);
+};
+await openShowAll();
 await row('ST-01').locator('button.sedit').click();
 await pg.waitForSelector('.saedit');
 const labels = await pg.evaluate(() => [...document.querySelectorAll('.saedit label')].map(l => l.childNodes[0].textContent));
@@ -128,7 +137,7 @@ await set('Crew', 'PERSIST/CHECK');
 await pg.locator('.saedit-btns button.primary').click(); await pg.waitForTimeout(500);
 await pg.reload({ waitUntil: 'networkidle' });
 await pg.waitForSelector('#flowSvg .ball');
-await pg.click('#showAllBtn'); await pg.waitForSelector('#showAllPanel.on');
+await openShowAll();
 ok('edits survive a reload', (await meta('ST-01')).includes('PERSIST/CHECK'));
 await resetRow('ST-01');
 await pg.click('#saClose'); await pg.waitForTimeout(200);
@@ -192,7 +201,10 @@ ok('the page is a secure context, which the file pickers require', fsCaps.secure
 /* ---- the Open and Save controls ---- */
 const FFNAME = await import('../src/app/fileFormat.js');
 ok('the Open button exists', await pg.locator('#openFileBtn').count() === 1);
-ok('there is exactly one Save changes button', await pg.locator('#saveChanges').count() === 1
+/* Never more than one — two Save buttons side by side is a fault this suite has
+   caught before. It is absent while there is nothing to save; the checks further
+   down prove it comes back the moment there is. */
+ok('there is never a second Save button', await pg.locator('#saveChanges').count() <= 1
   && await pg.locator('#saveFileBtn').count() === 0);
 ok('the toolbar says when no file is open',
   (await pg.textContent('#openFileName')).includes('no file open'));
@@ -214,6 +226,10 @@ const afterOpen = await pg.evaluate(async () => {
     requestPermission: async () => { asked++; perm = 'granted'; return perm; },
     createWritable: async () => ({ write: t => { written.push(t); }, close: async () => {} }),
   });
+  /* Save changes only exists while there is something unsaved, so make there be
+     something: this is the state a user is in when they press it. */
+  window.__markFileDirtyForTests();
+  await new Promise(r => setTimeout(r, 60));
   document.getElementById('saveChanges').click();
   await new Promise(r => setTimeout(r, 1500));
   return { asked, wrote: written.length, status: document.getElementById('saveStat').textContent };
@@ -231,6 +247,10 @@ const refused = await pg.evaluate(async () => {
     requestPermission: async () => { throw new DOMException('user activation is required', 'SecurityError'); },
     createWritable: async () => ({ write: t => { written.push(t); }, close: async () => {} }),
   });
+  /* Save changes only exists while there is something unsaved, so make there be
+     something: this is the state a user is in when they press it. */
+  window.__markFileDirtyForTests();
+  await new Promise(r => setTimeout(r, 60));
   document.getElementById('saveChanges').click();
   await new Promise(r => setTimeout(r, 1500));
   return { wrote: written.length, status: document.getElementById('saveStat').textContent };
@@ -248,6 +268,10 @@ const dropped = await pg.evaluate(async () => {
     createWritable: async () => ({ write: () => {}, close: async () => {} }),  /* writes nothing */
     getFile: async () => ({ size: 0 }),                                        /* file stays empty */
   });
+  /* Save changes only exists while there is something unsaved, so make there be
+     something: this is the state a user is in when they press it. */
+  window.__markFileDirtyForTests();
+  await new Promise(r => setTimeout(r, 60));
   document.getElementById('saveChanges').click();
   await new Promise(r => setTimeout(r, 1500));
   return document.getElementById('saveStat').textContent;
@@ -264,6 +288,10 @@ const good = await pg.evaluate(async () => {
     createWritable: async () => ({ write: t => { stored = t; }, close: async () => {} }),
     getFile: async () => ({ size: new Blob([stored]).size }),
   });
+  /* Save changes only exists while there is something unsaved, so make there be
+     something: this is the state a user is in when they press it. */
+  window.__markFileDirtyForTests();
+  await new Promise(r => setTimeout(r, 60));
   document.getElementById('saveChanges').click();
   await new Promise(r => setTimeout(r, 1500));
   const el = document.getElementById('lastSaved');
@@ -287,14 +315,14 @@ ok('saving still works with no cloud button',
   (await pg.textContent('#saveStat')).trim().length > 0);
 
 /* ---- Save a copy: the handover case, which must start clean every time ---- */
-await pg.click('#saveCopyBtn'); await pg.waitForTimeout(600);
+await viaMenu('file', '#saveCopyBtn'); await pg.waitForTimeout(600);
 ok('Save a copy opens a dialog', await pg.locator('#copyModal').count() === 1);
 ok('Save a copy starts with students unticked', !(await pg.isChecked('#copyStudents')));
 ok('Save a copy lists the syllabi to tick', await pg.locator('#copySylList input').count() >= 4);
 ok('Save a copy sits above the Show All panel (81)',
   await pg.evaluate(() => +getComputedStyle(document.getElementById('copyModal')).zIndex) > 81);
 await pg.check('#copyStudents'); await pg.click('#copyCancel'); await pg.waitForTimeout(400);
-await pg.click('#saveCopyBtn'); await pg.waitForTimeout(600);
+await viaMenu('file', '#saveCopyBtn'); await pg.waitForTimeout(600);
 ok('Save a copy resets students to unticked every time', !(await pg.isChecked('#copyStudents')));
 await pg.click('#copyCancel'); await pg.waitForTimeout(300);
 
@@ -534,6 +562,90 @@ ok('the chart zoom control says which side it zooms', /chart/i.test(zoomLabels.f
   JSON.stringify(zoomLabels.flow));
 ok('the panel zoom control says which side it zooms', /panel/i.test(zoomLabels.side),
   JSON.stringify(zoomLabels.side));
+
+/* ---- the top bar: 22 controls wrapping onto six rows at 1440 ----
+   Grouped behind Course / Syllabus / File / View menus. Only the three
+   dropdowns, Edit and Show All Details stay out, plus Save changes when there
+   is something to save. */
+/* A clean slate: earlier checks leave flow edits unsaved, and this block is
+   about what the bar looks like with nothing to save. */
+await pg.reload({ waitUntil: 'networkidle' });
+await pg.waitForSelector('#flowSvg .ball');
+await pg.setViewportSize({ width: 1440, height: 900 });
+await pg.waitForTimeout(500);
+/* Counted by height, not by distinct top offsets: a tall label wrapping a select
+   and a short button sit at different tops on the SAME row, so counting tops
+   reported two rows for a bar that fits on one. */
+const barRows = await pg.evaluate(() => {
+  const c = document.querySelector('header .controls');
+  const kids = [...c.children].filter(e => e.getBoundingClientRect().width > 0);
+  const tallest = Math.max(...kids.map(e => e.getBoundingClientRect().height));
+  return { h: Math.round(c.getBoundingClientRect().height), tallest: Math.round(tallest), n: kids.length };
+});
+ok('the top bar fits on one row at 1440', barRows.h <= barRows.tallest + 4,
+  `${barRows.h}px tall, tallest control ${barRows.tallest}px, ${barRows.n} groups`);
+
+/* Grouping must hide nothing: every action still has to be reachable. Named by
+   id, with the menu that now holds it. */
+const MENUS = {
+  '#courseMenuBtn': ['#addCourse', '#renCourse', '#delCourse'],
+  '#sylMenuBtn': ['#dupSyl', '#addSyl', '#renSyl', '#ordSyl', '#delSyl'],
+  '#fileMenuBtn': ['#openFileBtn', '#importSylBtn', '#saveCopyBtn', '#optCharts', '#optStudents'],
+  '#viewMenuBtn': ['#showAllBtn'],
+};
+const unreachable = [];
+for (const [btn, items] of Object.entries(MENUS)) {
+  if (await pg.locator(btn).count() !== 1) { unreachable.push(`${btn} missing`); continue; }
+  await pg.click(btn); await pg.waitForTimeout(150);
+  for (const it of items) if (await pg.locator(`${it}:visible`).count() !== 1) unreachable.push(`${btn} > ${it}`);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
+}
+ok('every grouped action is still reachable from its menu', unreachable.length === 0,
+  unreachable.join(', '));
+
+ok('the three dropdowns and Show All Details stay out of the menus', await pg.evaluate(() => {
+  const out = ['#courseSel', '#sylSel', '#activeSel', '#detailsBtn', '#arrangeBtn'];
+  return out.every(s => { const e = document.querySelector(s); return e && e.getBoundingClientRect().width > 0; });
+}));
+
+/* Clicking away must close a menu. A menu left open swallows the next click the
+   way the old Cloud dialog did. */
+await pg.click('#fileMenuBtn'); await pg.waitForTimeout(150);
+const openedFile = await pg.locator('#openFileBtn:visible').count() === 1;
+await pg.mouse.click(700, 700); await pg.waitForTimeout(200);
+ok('a menu opens, and clicking away closes it again',
+  openedFile && await pg.locator('#openFileBtn:visible').count() === 0);
+
+/* Save changes is a data-loss risk hidden in a menu and clutter when always
+   shown, so it appears exactly when there is something unsaved. Marks and dates
+   already write themselves to storage; flow edits and the open file do not. */
+ok('Save changes is out of the way when there is nothing to save',
+  await pg.locator('#saveChanges').count() === 0);
+await pg.click('#arrangeBtn'); await pg.waitForTimeout(400);
+await pg.click('#fitBtn'); await pg.waitForTimeout(300);
+const dragged = await pg.evaluate(() => {
+  const g = document.querySelector('#flowSvg .ball');
+  const r = g.getBoundingClientRect();
+  return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+});
+await pg.mouse.move(dragged.x, dragged.y);
+await pg.mouse.down();
+await pg.mouse.move(dragged.x + 40, dragged.y + 30, { steps: 8 });
+await pg.mouse.up();
+await pg.waitForTimeout(400);
+ok('Save changes appears the moment a flow edit makes something unsaved',
+  await pg.locator('#saveChanges:visible').count() === 1);
+/* The button appearing must not resize the bar. When it did, the board slid
+   down 44px mid-drag and a ball dragged 45px moved 89. */
+ok('the bar is the same height with the Save button showing', await pg.evaluate(h => {
+  const c = document.querySelector('header .controls');
+  return Math.abs(Math.round(c.getBoundingClientRect().height) - h) <= 1;
+}, barRows.h), `was ${barRows.h}px`);
+await pg.click('#undoBtn').catch(() => {});
+await pg.waitForTimeout(300);
+await pg.click('#arrangeBtn'); await pg.waitForTimeout(300);
+await pg.setViewportSize({ width: 1500, height: 950 });
+await pg.waitForTimeout(300);
 
 ok('no uncaught page errors', errs.length === 0, errs.slice(0, 2).join(' | '));
 ok('no unexpected failed requests', bad4xx.length === 0, [...new Set(bad4xx)].slice(0, 3).join(' | '));

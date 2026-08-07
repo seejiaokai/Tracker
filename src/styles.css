@@ -126,7 +126,9 @@ svg.perf .edgehit{pointer-events:none}
    header at any width where the header wraps past that. */
 .arrhint{background:#16384a;border-bottom:1px solid var(--accent);color:#dff;padding:4px 12px;font-size:12px;display:none;text-align:center}
 .arrhint.on{display:block}
-.savestat{font-size:11px;color:#8a93a3;margin-left:6px;white-space:nowrap}
+/* Fixed-width slot so the bar is the same size dirty or clean. */
+.saveslot{display:inline-flex;align-items:center;gap:6px;justify-content:flex-end;min-width:172px}
+.savestat{font-size:11px;color:#8a93a3;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis}
 .savestat.ok{color:#39d353}.savestat.saving{color:#ffb84d}.savestat.err{color:#ff6b6b}
 .ball text.lbl{font:600 8.5px "Segoe UI",Arial;fill:#10131a;pointer-events:none}
 .ball text.lbll{fill:#fff}
@@ -188,5 +190,13 @@ small.hint{color:var(--muted);font-size:11px}
 .arrtools .arrnote{flex-basis:100%;text-align:center;color:var(--muted);font-size:11.5px;margin-top:3px}
 #flowSvg.arrange{background:#0c0e12;border:1px dashed #2b313d;border-radius:10px;touch-action:none}
 #saveChanges.dirty{background:#4a2f16;border-color:var(--orange)}
-.sylbtns{display:inline-flex;gap:4px;align-items:center;padding-left:6px;margin-left:2px;border-left:1px solid var(--line)}
-#delSyl:hover{border-color:var(--red)}
+#delSyl:hover,#delCourse:hover{border-color:var(--red)}
+/* Grouping for the 22 controls that used to wrap onto six rows at 1440.
+   z-index 50: over the board and the sticky view tabs (35), under .modal (60). */
+.menu{position:relative;display:inline-flex}
+.menupanel{position:absolute;top:calc(100% + 5px);left:0;z-index:50;min-width:200px;display:none;flex-direction:column;gap:4px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:0 12px 32px rgba(0,0,0,.6)}
+.menupanel.on{display:flex}
+.menupanel button{text-align:left;width:100%}
+.menupanel label.sub{display:flex;align-items:center;gap:7px;padding:2px 4px}
+.menupanel .msep{height:1px;background:var(--line);margin:2px 0}
+.menupanel .mnote{font-size:11px;color:var(--muted);padding:2px 4px;line-height:1.5;overflow-wrap:anywhere}
