@@ -221,7 +221,10 @@ const CHART_2026 = {
   'SA(S)-1': ['AGW-01', 'DCA(S)-1', 'ST-13'],
   'SA-1': ['AGS-04', 'DCA-1', 'JMP-04', 'OPS-07', 'SA(S)-2', 'ST-17'],
   'SA-2': ['SA(S)-3', 'SA-1'], 'SA-3': ['SA(S)-4', 'SA-2'], 'SA-4': ['SA(S)-5', 'SA-3'],
-  'TR(S)-7': ['TR(S)-LAO'], 'ST-18': ['SAT-2', 'SATN-1'], 'AGW-01': ['T-12'],
+  'TR(S)-7': ['TR(S)-LAO'], 'AGW-01': ['T-12'],
+  /* ST-18 also takes DAAR-2 and NAAR-2 — a deliberate departure from the map, see
+     REFRESHER_2026 above. Pinned here so the map check and that request stay consistent. */
+  'ST-18': ['SAT-2', 'SATN-1', 'DAAR-2', 'NAAR-2'],
 };
 const by26 = Object.fromEntries(SYLLABI['2026'].map(e => [e.id, e]));
 const wrong = Object.entries(CHART_2026).filter(([id, want]) =>
@@ -243,6 +246,23 @@ const CHART_AGAA = {
 const byAG = Object.fromEntries(SYLLABI['A/G - A/A 2026'].map(e => [e.id, e]));
 const wrongAG = Object.entries(CHART_AGAA).filter(([id, want]) =>
   JSON.stringify((byAG[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+/* Air-to-air refresher chain, added to 2026 at the user's request. The Jul 26 map draws a
+   single DAAR spine and one DAAR/NAAR box feeding ST-18, all in dashed line; the user asked
+   for it split into four solid-line events instead, so this is deliberately NOT what the map
+   draws. Structure mirrors 2024 (DAAR-1 -> DAAR-2, NAAR -> NAAR 2) and the A/G - A/A spine. */
+const REFRESHER_2026 = {
+  'DAAR-1': ['AAS-04', 'INT(S)-2', 'TR-4'],
+  'DAAR-2': ['DAAR-1'],
+  'NAAR-1': ['NTR-2'],
+  'NAAR-2': ['NAAR-1'],
+  'ST-18': ['SAT-2', 'SATN-1', 'DAAR-2', 'NAAR-2'],
+};
+const by26r = Object.fromEntries(SYLLABI['2026'].map(e => [e.id, e]));
+const badRef = Object.entries(REFRESHER_2026).filter(([id, want]) =>
+  JSON.stringify((by26r[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+ok('2026 carries the DAAR / NAAR refresher chain', badRef.length === 0,
+  badRef.map(([id]) => `${id}=${by26r[id] ? '[' + (by26r[id].prereqs || []).join(',') + ']' : 'MISSING'}`).join(' | '));
+
 /* Read off the A/G - A/A map (images 20-29) and confirmed by a second independent reading,
    then approved by the user. Each was a link the drawing carries but the syllabus had lost;
    all four ADD a prerequisite, so they can only delay an event, never unlock one early. */
@@ -287,7 +307,11 @@ const SPAN_LIMIT = 1000;
    AAS-04->T-10 are both genuine and both long, because AAS-04 and TR-4 sit far from their
    consumers in the current layout. The links are right; the routing is ugly. Moving those
    boxes closer is a layout change and needs the user, so the count is recorded, not hidden. */
-const SPAN_BASELINE = { '2024': 0, '2026': 2, 'Tx 2026': 3, 'A/G - A/A 2026': 10, 'Tx 2024': 3 };
+/* 2026 went 2 -> 5 with the refresher chain: AAS-04->DAAR-1 (1141px), TR-4->DAAR-1 (1209px)
+   and the DAAR-1->DAAR-2 spine (5428px). The spine is long by design — it mirrors A/G - A/A,
+   where the same chain runs down the far-left column, and the map itself draws DAAR as a
+   full-height spine across eight pages. */
+const SPAN_BASELINE = { '2024': 0, '2026': 5, 'Tx 2026': 3, 'A/G - A/A 2026': 10, 'Tx 2024': 3 };
 const stretched = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const L = DEFAULT_LAYOUTS[name]; if (!L) continue;
