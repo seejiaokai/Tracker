@@ -747,6 +747,37 @@ ok('the panel zoom control does not sit on top of a card',
   zoomOverlap.none || zoomOverlap.hit.length === 0,
   (zoomOverlap.hit && zoomOverlap.hit.length) ? `covers ${zoomOverlap.hit.join(', ')} — control at ${JSON.stringify(zoomOverlap.z)}` : '');
 
+/* The key ball is there to say which ring segment is whose. Shrinking the whole
+   drawing to fit the phone made the names unreadable, so the ring is drawn small
+   and the names large. Measured as RENDERED pixels — the SVG font-size attribute
+   says 21 either way; what matters is 21 times the viewBox scale. */
+const keyBall = await pg.evaluate(() => {
+  const svg = document.querySelector('.keyball svg');
+  if (!svg) return null;
+  const box = svg.getBoundingClientRect();
+  const names = [...svg.querySelectorAll('text')].slice(1);   /* [0] is the course */
+  const sizes = names.map(t => t.getBoundingClientRect().height);
+  const clipped = names.filter(t => {
+    const r = t.getBoundingClientRect();
+    return r.left < box.left - 1 || r.right > box.right + 1;
+  }).map(t => t.textContent);
+  return { smallest: Math.round(Math.min(...sizes)), n: names.length, clipped };
+});
+ok('the student names on the key ball are big enough to read',
+  keyBall && keyBall.smallest >= 9, keyBall ? `${keyBall.smallest}px tall` : 'no key ball');
+ok('no student name runs off the key ball',
+  keyBall && keyBall.clipped.length === 0, keyBall ? keyBall.clipped.join(', ') : '');
+
+/* The two cards sit side by side, so a mismatch is obvious. */
+const cardPair = await pg.evaluate(() => {
+  const find = t => [...document.querySelectorAll('#side .card')]
+    .find(c => ((c.querySelector('h3') || {}).textContent || '').trim().startsWith(t));
+  const a = find('Students'), b = find('Overall');
+  return (a && b) ? Math.abs(Math.round(a.getBoundingClientRect().height - b.getBoundingClientRect().height)) : null;
+});
+ok('the Students card is the same size as the Overall card beside it',
+  cardPair !== null && cardPair <= 14, `${cardPair}px apart`);
+
 ok('every statistic fits on one phone screen, no pinching to photograph it',
   phoneStats.scrollH <= phoneStats.clientH,
   `${phoneStats.scrollH}px of stats in ${phoneStats.clientH}px of screen — `

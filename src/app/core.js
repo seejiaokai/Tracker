@@ -1810,18 +1810,23 @@ export async function applyLullCopy() {
 }
 
 
+/* The names are the information; the ring is only a key. It used to be drawn the
+   other way round — a big ring with 11px names — so shrinking the whole thing to
+   fit a phone made the names unreadable. Small ring, large names. */
 export function renderKeyBall() {
-  const n = Math.max(1, roster.length); const size = 150, cx = 75, cy = 75, rO = 66, rI = 44;
+  const n = Math.max(1, roster.length); const cx = 75, cy = 75, rO = 38, rI = 25;
   let segs = '', labels = '';
   for (let i = 0; i < n; i++) {
     const [a0, a1] = wedge(i, n); const on = roster[i] === active;
     segs += `<path d="${sector(cx, cy, rO, rI, a0, a1)}" fill="${on ? '#16384a' : '#fff'}" stroke="${on ? '#36c2ff' : '#111'}" stroke-width="${on ? 2 : 1}"/>`;
-    const mid = (a0 + a1) / 2 * Math.PI / 180; const lr = rO + 18;
+    const mid = (a0 + a1) / 2 * Math.PI / 180; const lr = rO + 10;
     const x = cx + lr * Math.cos(mid), y = cy + lr * Math.sin(mid);
     const anchor = Math.cos(mid) > 0.3 ? 'start' : Math.cos(mid) < -0.3 ? 'end' : 'middle';
-    labels += `<text x="${x.toFixed(0)}" y="${(y + 3).toFixed(0)}" text-anchor="${anchor}" font-size="${on ? 12 : 11}" font-weight="${on ? 800 : 700}" fill="${on ? '#5ec8ff' : '#e9ecf2'}">${escapeId(roster[i])}</text>`;
+    labels += `<text x="${x.toFixed(0)}" y="${(y + 7).toFixed(0)}" text-anchor="${anchor}" font-size="${on ? 21 : 19}" font-weight="${on ? 800 : 700}" fill="${on ? '#5ec8ff' : '#e9ecf2'}">${escapeId(roster[i])}</text>`;
   }
-  return `<div style="text-align:center;margin-top:8px"><svg viewBox="-46 -28 242 206" width="214" height="182">
+  /* Wide and short: the names run out to either side, so the box wants the shape
+     of a name, not of a circle. */
+  return `<div style="text-align:center;margin-top:6px"><svg viewBox="-95 6 340 140" width="340" height="140" style="max-width:100%;height:auto">
   ${segs}<circle cx="${cx}" cy="${cy}" r="${rI}" fill="#f6c21a" stroke="#0007"/>
   <text x="${cx}" y="${cy + 4}" text-anchor="middle" font-size="11" font-weight="700">${escapeId(course)}</text>${labels}</svg></div>`;
 }

@@ -238,7 +238,9 @@ small.hint{color:var(--muted);font-size:11px}
  /* Two columns. Density alone got 2133px down to 1458 against ~620px of screen;
     only pairing the cards closes a gap that size. Cards holding date boxes span
     both columns — a dd/mm/yyyy field needs ~124px and a column is ~183px. */
- .side{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px;align-content:start;align-items:start}
+ /* stretch, not start: two cards side by side should be the same height, or the
+    shorter one looks like a mistake. The row is as tall as its taller card. */
+ .side{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px;align-content:start;align-items:stretch}
  /* Every card goes narrow and pairs off. Keeping the date-holding cards full
     width left 1151px against 754 of screen; pairing Currency with Pace alone is
     worth ~180 of that. A column is 183px and a compact dd/mm/yyyy needs ~124,
@@ -288,9 +290,9 @@ small.hint{color:var(--muted);font-size:11px}
  .paceRow .r,.opt2 .o .r{font-size:14px}
  .curGrid{column-gap:8px}
  .chip{padding:1px 6px;font-size:11px}
- /* Big enough to read which student is which — that is the whole point of it.
-    It was shrunk to 58px chasing height and became unreadable. */
- .keyball svg{width:132px;height:112px}
+ /* Fill the card's width — the names need the room, and the ring inside is
+    drawn small on purpose. Height follows from the viewBox. */
+ .keyball svg{width:100%;height:auto}
  .keyball{line-height:0}
  .card.wide .curKv{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
  /* Three pace boxes across fit here and not on the desktop panel: this card is
