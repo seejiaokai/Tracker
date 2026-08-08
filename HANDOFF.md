@@ -34,10 +34,8 @@ verified live. **Run `npm run live` and look at the screenshot before anything e
 | **Syllabus stuck on marked course** | "Open on last-marked" ran on every `loadCourse`, overwriting the user's own choice. Now opt-in: `init()` / `switchCourse` |
 | End dates off-screen on phone | Panel opens at the old 80%; pace boxes on one row, dates contained |
 
-**Not reproduced: the "ACG-06 puck snapping" report.** Edit → Show All Details moved zero
-balls, wrote no layout keys and raised no save button. Best theory: the syllabus was
-flipping back under them, so a ball belonging to the other chart looked like it had jumped.
-Ask them to try again now the flipping has stopped.
+**Not reproduced: "ACG-06 puck snapping".** Nothing moved under test; best theory is the
+syllabus was flipping back under them (since fixed). Ask them to retry.
 
 ### What shipped (the five interface packages)
 
@@ -69,11 +67,9 @@ does not; all four were previously confirmed by the user and are pinned.
 
 ### If you re-read these maps, know this first
 
-- **Two readings looked like real corrections and were not.** `INT(S)-2` appeared to gain
-  `AAS-04` on an arrowhead that, at 22×, stops in white space ~16px short of the J wire —
-  it hops J and feeds only K. And `SA(S)-3`/`SA(S)-5`/`DAAR` appeared to lose links, which
-  is what every independent reading concludes and exactly what `AGAA_SIM_CHAIN` and
-  `AGAA_ADDED` exist to overrule. **The user confirmed that chain twice.** Do not "fix" it.
+- **Two readings looked like real corrections and were not.** `INT(S)-2`+`AAS-04` (the
+  arrowhead hops the J wire), and the `SA(S)`/`DAAR` "lost" links every independent reading
+  concludes — `AGAA_SIM_CHAIN`/`AGAA_ADDED` overrule it. **User confirmed twice. Do not "fix".**
 - The resolver, brief and page transcriptions are in the session scratchpad, not the repo.
   The method that worked: one agent per page, letters transcribed as nodes, then resolve
   the chains; then diff against the app and only zoom into the differences.
@@ -107,21 +103,16 @@ ordering.
 
 ### The unreproduced save bug
 
-The user reported a second save appearing to do nothing. Never reproduced. `writeTo` reads
-the file back and compares sizes, failures report `NOT SAVED` and keep the work dirty, and
-the toolbar shows `saved N KB at HH:MM`. **If they report it again, ask whether that time
-changed.** Tell them to hard-refresh before testing anything newly shipped.
-
-The `fileDirty` fix above is a plausible partial explanation: the dot never lit after
-marking, so the app looked like it had nothing to save when it did.
+A second save appeared to do nothing; never reproduced. `writeTo` verifies by reading the
+file back; failures say `NOT SAVED`; the toolbar shows `saved N KB at HH:MM` — **if they
+report it again, ask whether that time changed.** The `fileDirty` fix is a plausible
+partial cause (the dot never lit after marking).
 
 ### Plan 9 is still blocked
 
-> Plan 9 empties `src/data/syllabi.js`, `layouts.js` and `eventInfo.js`. **Any syllabus the
-> user has never edited exists only in that code.** It may not be deleted until the user
-> has saved a file, reopened it, and said *in their own words* that their syllabi are
-> inside it. No check can stand in for that. If you reach Plan 9 without that confirmation
-> in the conversation, **stop and ask.**
+> Plan 9 empties the three data files. **An unedited syllabus exists only in that code.**
+> Nothing may be deleted until the user has saved a file, reopened it, and said *in their
+> own words* their syllabi are inside. No check stands in for that. **Stop and ask.**
 
 ### Worth raising with them
 
@@ -184,6 +175,15 @@ the reload problem.
   file and use `-F`.
 - See `CLAUDE.md` → Gotchas for the `#root` flex column, `minmax(0,1fr)`, and the
   `scrollHeight` floor. All three cost real time this session.
+
+## Interface fixes, 8 Aug evening
+
+Zoom buttons now anchor at the middle of the current view (`setFlowZoom` corrects the
+scroll; the reflow-force matters, or the new range is stale and clamps). The edit-mode
+hint bar floats in a zero-height wrapper (`.arrhintwrap`) over the legend — in flow, its
+height changed on every tool switch AND every 1.8s flash, shoving the board mid-line-draw
+so ends landed wrong. `pointer-events:none` keeps it click-transparent. Both pinned by
+browser checks that were proven red first (17px board shift; 572px viewport jump).
 
 ## Whenever baked chart data changes, hand the user a sync file
 

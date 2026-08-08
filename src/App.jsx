@@ -73,8 +73,14 @@ export default function App() {
   return (
     <>
       <Header />
-      <div className={'arrhint' + (core.arrangeMode ? ' on' : '')} id="arrhint">{core.hintFlash || core.hintBase}</div>
       <ArrangeTools />
+      {/* Zero-height wrapper: the hint FLOATS over the legend/board instead of
+          occupying flow space. Its height changes with every tool switch and
+          1.8s flash message; in flow that shoved the chart up and down under
+          the pointer mid-draw, so lines connected to the wrong place. */}
+      <div className="arrhintwrap">
+        <div className={'arrhint' + (core.arrangeMode ? ' on' : '')} id="arrhint">{core.hintFlash || core.hintBase}</div>
+      </div>
       <Legend />
       <ViewTabs tab={tab} setTab={setTab} />
       <div className="layout" id="layout">
