@@ -1137,6 +1137,35 @@ ok('Tx BFM-5 shows the BCTM BFM-7 profile, not the long course\'s',
   txInfo.name.includes('Refer to BCTM BFM-7') && txInfo.crew === 'IP / W, UP / IW or IP',
   JSON.stringify(txInfo));
 await pg.click('#ifCancel'); await pg.waitForTimeout(200);
+
+/* Opening a FILE must not clobber those profiles. Files carry the whole info
+   table, and applyCharts used to store it verbatim as user overrides — which
+   sit ABOVE the per-syllabus profiles, so one open froze every bubble to the
+   long course's words. Replay exactly that: apply a charts payload whose
+   eventInfo is the full baked table, then look at Tx BFM-5 again. */
+const fileClobber = await pg.evaluate(async () => {
+  const core = window.__coreForTests;
+  const full = {};
+  const snap = await core.collectCharts(['2026']); /* full baked table + edits */
+  Object.assign(full, snap.eventInfo);
+  await core.applyCharts({ order: [], syllabi: {}, layouts: {}, eventInfo: full }, {});
+  /* the sync layer prefixes its localStorage keys with "ocu:" */
+  const stored = JSON.parse(localStorage.getItem('ocu:v3:eventinfo') || '{}');
+  return { storedKeys: Object.keys(stored).length, sentKeys: Object.keys(full).length };
+});
+await clickBall('BFM-5'); await pg.waitForTimeout(300);
+await pg.click('#popEditInfo'); await pg.waitForSelector('#infoModal');
+const infoAfterFile = await pg.evaluate(() => ({
+  name: document.getElementById('ifName').value,
+  crew: document.getElementById('ifCrew').value,
+}));
+ok('opening a file leaves no redundant info overrides behind',
+  fileClobber.sentKeys > 200 && fileClobber.storedKeys === 0,
+  `sent ${fileClobber.sentKeys}, stored ${fileClobber.storedKeys}`);
+ok('Tx BFM-5 still shows its own profile after a file open',
+  infoAfterFile.name.includes('Refer to BCTM BFM-7') && infoAfterFile.crew === 'IP / W, UP / IW or IP',
+  JSON.stringify(infoAfterFile));
+await pg.click('#ifCancel'); await pg.waitForTimeout(200);
 await pg.selectOption('#sylSel', sylOptions.find(v => v === '2026') || '2026');
 await pg.waitForTimeout(800);
 await clickBall('BFM-5'); await pg.waitForTimeout(300);
