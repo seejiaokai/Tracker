@@ -1303,6 +1303,18 @@ ok('Tx SA-1 bridges to TI-2, not LASDT-2', (() => {
   return p.includes('TI-2') && !p.includes('LASDT-2') && (txById['TI-2']?.prereqs || []).includes('TI-1');
 })(), `SA-1=[${(txById['SA-1']?.prereqs || []).join(',')}] TI-2=[${(txById['TI-2']?.prereqs || []).join(',')}]`);
 
+/* SAT-1 lost its link to the flight line when the short course cut SA-6 and
+   SAT(S)-2: the long course makes the day tactics sortie wait for the last SA
+   flight, and Tx's own night version, SATN-1, already waits for SA-5. Both Tx
+   years had the day sortie waiting on its sim alone. The user's call, 8 Aug —
+   they asked for it on both years, so both are pinned. */
+const TX_SAT1 = ['SA-5', 'SAT(S)-1'];
+const txSat1Wrong = ['Tx 2026', 'Tx 2024'].filter(name =>
+  JSON.stringify(((SYLLABI[name].find(e => e.id === 'SAT-1') || {}).prereqs || []).slice().sort())
+    !== JSON.stringify(TX_SAT1));
+ok('SAT-1 waits for SA-5 as well as its sim, on both Tx courses', txSat1Wrong.length === 0,
+  txSat1Wrong.map(n => `${n}=[${((SYLLABI[n].find(e => e.id === 'SAT-1') || {}).prereqs || []).join(',')}]`).join(' | '));
+
 /* NTR-1 waits on SA-4 in the 2026 map AND in the short course's own table. */
 ok('Tx NTR-1 waits for SA-4', JSON.stringify((txById['NTR-1']?.prereqs || []).slice().sort())
   === JSON.stringify(['NTR(S)-1', 'SA-4']), `[${(txById['NTR-1']?.prereqs || []).join(',')}]`);

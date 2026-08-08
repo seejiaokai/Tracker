@@ -120,8 +120,10 @@ marking, so the app looked like it had nothing to save when it did.
   more on it.
 - Switching student scrolls to their last mark but does **not** switch syllabus. Switching
   under them would be a surprise and would prompt about unsaved flow edits.
-- **Tx `SAT-1`** — recommended and not yet done: make it wait for `SA-5` as well as
-  `SAT(S)-1`. Their syllabus decision, so it needs their word.
+- ~~**Tx `SAT-1`**~~ — done 8 Aug. The user chose to add `SA-5`, on **both** Tx years.
+  Rationale: 2026 makes it wait for the last SA flight (`SA-6`) and the short course cut
+  that event without moving the link down; Tx's own `SATN-1` already waits for `SA-5`.
+  Pinned by `TX_SAT1` in `smoke.mjs`.
 - **Tx `SA-1`, `SA(S)-1`, `NTR(S)-1`, `SA-5`** still differ from 2026 in ways that are
   defensible either way — each involves an event the short course cuts. Deliberately left
   alone. (`SA-1`→`TI-2` and the four `DAAR`/`NAAR` refreshers are done, at their request.)
