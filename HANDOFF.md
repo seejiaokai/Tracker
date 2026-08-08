@@ -52,11 +52,10 @@ Ask them to try again now the flipping has stopped.
 
 ### Two real bugs fixed on the way, neither reported
 
-- **Marking a student never set `fileDirty`.** `saveChangesClick` writes the file
-  regardless, so nothing was ever lost while the button was permanently on screen — but
-  the dot never lit, and the button could not be hidden safely. Now flagged in the four
-  functions that persist the user's work, behind a `loading` guard so boot migrations do
-  not claim work the user has not done.
+- **Marking a student never set `fileDirty`.** `saveChangesClick` writes regardless, so
+  nothing was lost while the button was permanently on screen — but the dot never lit, and
+  the button could not be hidden safely. Now flagged in the four functions that persist the
+  user's work, behind a `loading` guard so boot migrations do not claim work they did not do.
 - **Clicking an event on a syllabus with no students crashed the page** —
   `marks[null][id]`. Grading is a no-op with no students now.
 
@@ -93,6 +92,31 @@ does not; all four were previously confirmed by the user and are pinned.
   is what the new academics check derives from. Hours corroborate: 231.5 academic on both
   tracks, 74.5 vs 71 device, 39 vs 31 sorties (and the tables list exactly 39 and 31).
 
+### The document itself — the far better source (8 Aug)
+
+The user supplied the sanitised `.docx`. **Read its text, never its chart images** (see
+`CLAUDE.md`). Three parts settle almost everything, and beat any chart transcription:
+
+| Section | What it gives |
+|---|---|
+| `FLYING MODULE (LONG CONVERSION – "B" Course)` | per-event `Prerequisites` for 2026 |
+| `FLYING MODULE (SHORT CONVERSION – "Tx" Course)` | per-event `Prerequisites` for Tx |
+| Two `TRAINING CURRICULUM TRACK SHEET`s | the authoritative **event list** per course |
+
+**The track sheet's serial-number column is the membership test.** Both sheets print all
+209 rows; a row with **no S/N** is one that course does not do. Tx leaves 14 blank —
+3 removed-from-syllabus plus `TR-6(P)`, `BFM-6`, `BFM-7`, a `LASDT`, `DCA(S)-1`, `DCA-1`,
+`TI-3`, `SA(S)-3`, `SA-6`, `SAT(S)-2`, `SAT-2`. Parse rows by looking *back* for the S/N;
+a numbered-runs-only parse silently drops every blank row and misreads the course.
+
+Tx renumbers, with `(BCTM …)` naming the long-course equivalent — `SA-05 (BCTM SA-6)`,
+`TI-01 (BCTM TI-1, TI-2)`, `BFM-05 (BCTM BFM-7)`. **Both syllabi were verified event-for-
+event against these sheets on 8 Aug and match exactly**, the only extras being DAAR/NAAR,
+`NVG-LAB` and `SA(S)-3`. But **the Tx flying-module table still carries long-course
+prerequisites in places** — it names `SAT(S)-2` and `SA(S)-3`, neither of which Tx flies,
+the same lag the document admits to for A/G – A/A. Track sheet for membership, table for
+ordering.
+
 ## Still open, and what to ask
 
 ### The unreproduced save bug
@@ -120,8 +144,16 @@ marking, so the app looked like it had nothing to save when it did.
   more on it.
 - Switching student scrolls to their last mark but does **not** switch syllabus. Switching
   under them would be a surprise and would prompt about unsaved flow edits.
-- **Tx `SAT-1`** — recommended and not yet done: make it wait for `SA-5` as well as
-  `SAT(S)-1`. Their syllabus decision, so it needs their word.
+- ~~**Tx `SAT-1`**~~ — done 8 Aug, on **both** Tx years, and since **confirmed by the
+  document**: the Tx flying module gives `SAT-1` [`SA-5`, `SAT(S)-2`], and the Tx track
+  sheet annotates its own `SA-05` as *(BCTM SA-6)* — the exact flight 2026 makes `SAT-1`
+  wait for. `SAT(S)-2` is unnumbered on that sheet, so `SAT(S)-1` is the sim that applies,
+  which is also the one Tx's `SATN-1` names. Pinned by `TX_SAT1`.
+- **`SA(S)-3` on Tx — a live contradiction inside the document.** The track sheet leaves it
+  unnumbered (not flown); the Tx flying module still requires it for `SA-2` and `SA-3`.
+  **The user chose to keep it, 8 Aug**, having confirmed that sim chain twice before. Pinned,
+  so the blank row cannot be "corrected" into a deletion. If they come back from the
+  squadron with an answer, that pin is the one to change.
 - **Tx `SA-1`, `SA(S)-1`, `NTR(S)-1`, `SA-5`** still differ from 2026 in ways that are
   defensible either way — each involves an event the short course cuts. Deliberately left
   alone. (`SA-1`→`TI-2` and the four `DAAR`/`NAAR` refreshers are done, at their request.)

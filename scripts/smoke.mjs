@@ -1303,6 +1303,54 @@ ok('Tx SA-1 bridges to TI-2, not LASDT-2', (() => {
   return p.includes('TI-2') && !p.includes('LASDT-2') && (txById['TI-2']?.prereqs || []).includes('TI-1');
 })(), `SA-1=[${(txById['SA-1']?.prereqs || []).join(',')}] TI-2=[${(txById['TI-2']?.prereqs || []).join(',')}]`);
 
+/* SAT-1 lost its link to the flight line when the short course cut SA-6 and
+   SAT(S)-2: the long course makes the day tactics sortie wait for the last SA
+   flight, and Tx's own night version, SATN-1, already waits for SA-5. Both Tx
+   years had the day sortie waiting on its sim alone. The user's call, 8 Aug —
+   they asked for it on both years, so both are pinned.
+
+   Since confirmed against the document itself (FG Master Syllabi Annex B, Jul 26):
+   the SHORT CONVERSION "Tx" flying module gives SAT-1 [SA-5, SAT(S)-2], and the
+   Tx track sheet annotates its own SA-05 as "(BCTM SA-6)" — the very flight the
+   long course makes SAT-1 wait for. SAT(S)-2 carries no serial number on the Tx
+   track sheet, i.e. the short course does not fly it, so SAT(S)-1 is the sim that
+   applies — which is also the one Tx's SATN-1 names. */
+const TX_SAT1 = ['SA-5', 'SAT(S)-1'];
+const txSat1Wrong = ['Tx 2026', 'Tx 2024'].filter(name =>
+  JSON.stringify(((SYLLABI[name].find(e => e.id === 'SAT-1') || {}).prereqs || []).slice().sort())
+    !== JSON.stringify(TX_SAT1));
+ok('SAT-1 waits for SA-5 as well as its sim, on both Tx courses', txSat1Wrong.length === 0,
+  txSat1Wrong.map(n => `${n}=[${((SYLLABI[n].find(e => e.id === 'SAT-1') || {}).prereqs || []).join(',')}]`).join(' | '));
+
+/* The Jul 26 document prints these four struck through and labelled "(Removed from
+   syllabus)". Every 2026-family syllabus was already clean; 2024 keeps them, which
+   is right — that is the older course, where they still existed. Pinned so a future
+   transcription pass cannot quietly reintroduce them. */
+const REMOVED_JUL26 = ['AVI-13', 'ST-08', 'ST-07(P)', 'ST-07(W)'];
+const revivedJul26 = [];
+for (const name of ['2026', 'Tx 2026', 'A/G - A/A 2026']) {
+  const ids = new Set(SYLLABI[name].map(e => e.id));
+  REMOVED_JUL26.filter(id => ids.has(id)).forEach(id => revivedJul26.push(`${name}:${id}`));
+}
+ok('events the document removed are absent from every 2026 syllabus', revivedJul26.length === 0,
+  revivedJul26.join(', '));
+ok('2024 still carries them, being the older course',
+  REMOVED_JUL26.every(id => SYLLABI['2024'].some(e => e.id === id)));
+
+/* The document contradicts itself here: the Tx track sheet leaves SA(S)-3 without a
+   serial number, the way it marks the eleven events the short course drops, but the
+   Tx flying module still requires it for SA-2 and SA-3. The user chose to keep it,
+   8 Aug, having confirmed the SA(S)-2..-5 chain twice before. Pinned so the
+   unnumbered row does not get "corrected" into a deletion later.
+
+   Only SA-2 is asserted. The Tx table also gives SA-3 [SA-2, SA(S)-3], but the app
+   follows the 2026 map's stricter SA-3 [SA-2, SA(S)-4] — and SA(S)-4 sits behind
+   SA(S)-3 anyway, so the ordering it enforces is the same. */
+ok('Tx keeps SA(S)-3, and SA-2 still waits for it', (() => {
+  const has = SYLLABI['Tx 2026'].some(e => e.id === 'SA(S)-3');
+  return has && (txById['SA-2']?.prereqs || []).includes('SA(S)-3');
+})(), `present=${SYLLABI['Tx 2026'].some(e => e.id === 'SA(S)-3')} SA-2=[${(txById['SA-2']?.prereqs || []).join(',')}]`);
+
 /* NTR-1 waits on SA-4 in the 2026 map AND in the short course's own table. */
 ok('Tx NTR-1 waits for SA-4', JSON.stringify((txById['NTR-1']?.prereqs || []).slice().sort())
   === JSON.stringify(['NTR(S)-1', 'SA-4']), `[${(txById['NTR-1']?.prereqs || []).join(',')}]`);
