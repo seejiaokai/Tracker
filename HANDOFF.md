@@ -39,34 +39,25 @@ balls, wrote no layout keys and raised no save button. Best theory: the syllabus
 flipping back under them, so a ball belonging to the other chart looked like it had jumped.
 Ask them to try again now the flipping has stopped.
 
-### What shipped
+### What shipped (the five interface packages)
 
-| | |
-|---|---|
-| **1. Quick wins** | End dates no longer run off the panel · edit toolbar docked below the top bar instead of covering the first event · Fit and Reset layout moved into it, so the header stops reshuffling · zoom controls labelled **Chart** and **Panel** |
-| **2. Top bar** | 22 controls on six rows → one row and four menus (Course, Syllabus, File, View) · Save changes appears only when there is unsaved work |
-| **3. Phone** | Chart opens fitted to the screen, so it only scrolls down · 170px of room past the last event · every statistic on one screen (703px of content in 763px) |
-| **4. Lull periods** | Per student, in one pop-up calendar: first click sets the start, second the end · tap a period to change it · **Copy to…** · the calendar leaves the side panel |
-| **5. Opening view** | Opens on the last student, their syllabus, scrolled to the event they last marked |
+Edit toolbar docked below the top bar; Fit/Reset moved into it; zooms labelled **Chart**
+and **Panel** · top bar: 22 controls on six rows → one row + four menus (Course, Syllabus,
+File, View), Save changes only while dirty · phone: chart opens fitted, stats on one
+screen · lull periods per student in one pop-up calendar with **Copy to…** · opens on the
+last student, their syllabus, scrolled to their last mark.
 
 ### Two real bugs fixed on the way, neither reported
 
-- **Marking a student never set `fileDirty`.** `saveChangesClick` writes regardless, so
-  nothing was lost while the button was permanently on screen — but the dot never lit, and
-  the button could not be hidden safely. Now flagged in the four functions that persist the
-  user's work, behind a `loading` guard so boot migrations do not claim work they did not do.
-- **Clicking an event on a syllabus with no students crashed the page** —
-  `marks[null][id]`. Grading is a no-op with no students now.
+- **Marking never set `fileDirty`** — the dot never lit. Now flagged in the four functions
+  that persist work, behind a `loading` guard so boot migrations claim nothing.
+- **Clicking an event on a syllabus with no students crashed** — grading is a no-op now.
 
 ## The course maps — checked against the user's own screenshots
 
-They supplied 22 screenshots of the rendered Annex B (`IMG_3257`–`3278`). Both maps are
-now transcribed in full and pinned:
-
-| File | What it holds |
-|---|---|
-| `scripts/course-map-2026.json` | The DEFAULT map, B-11…B-22, 205 events |
-| `scripts/course-map-agaa-2026.json` | The A/G – A/A map, B-23…B-32, 205 events |
+They supplied 22 screenshots of the rendered Annex B. Both maps are transcribed in full
+and pinned: `scripts/course-map-2026.json` (DEFAULT, B-11…B-22) and
+`scripts/course-map-agaa-2026.json` (A/G – A/A, B-23…B-32), 205 events each.
 
 **2026 was already correct** — not one link differs from the drawing. The only gaps are
 naming (`AVI-12A/B`, `IEPE`, `NTR(S)-1 + IPC(W)`) and the DAAR/NAAR split the user asked
@@ -194,7 +185,16 @@ the reload problem.
 - See `CLAUDE.md` → Gotchas for the `#root` flex column, `minmax(0,1fr)`, and the
   `scrollHeight` floor. All three cost real time this session.
 
+## Whenever baked chart data changes, hand the user a sync file
+
+**The user asked for this, 8 Aug.** Their stored charts shadow baked ones (the ✎), so a
+baked change alone is invisible on their devices. Build a charts-only `ocu-tracker` JSON
+(changed syllabi + layouts, `eventInfo: {}`), verify it with `readFile()`, send it; they
+open it in the app and save. Safe now: `applyCharts` keeps only info fields that differ
+from the baked base (`scrubEventInfo`, also run on every load to heal polluted stores) —
+before that fix, one file-open froze every bubble and clobbered the per-syllabus profiles.
+
 ## Testing
 
-`npm run smoke` — 163 checks, must be green before every commit touching `src/`.
+`npm run smoke` — 187 checks, must be green before every commit touching `src/`.
 `npm run live` — the deployed site, after the Pages run finishes. Never call a branch "live".

@@ -36,7 +36,22 @@ const DARKC = new Set(['sim', 'acad', 'na']); // labels needing dark text on lig
 export const GRADE_FILL = { dco: '#000000', dpco: '#1f6dff', marg: '#27d64a', na: '#cdbb8e' };
 export const DONE = new Set(['dco', 'dpco', 'marg']);
 export let eventInfo = {}; export let showDetails = false;
-async function loadEventInfo() { try { const r = await sGet('v3:eventinfo'); eventInfo = r ? JSON.parse(r) : {}; } catch (e) { eventInfo = {}; } }
+/* Keep only fields that genuinely differ from the baked base. Files used to
+   carry the WHOLE info table and applyCharts stored it verbatim, freezing every
+   event to the values of the day the file was saved — which sat above the
+   per-syllabus profiles and quietly clobbered them. Scrubbing on load heals
+   stores polluted that way; it never touches a real user edit. */
+function scrubEventInfo() {
+  for (const k of Object.keys(eventInfo)) {
+    const base = EVENT_INFO[k] || {}; const o = eventInfo[k]; const diff = {};
+    Object.keys(o).forEach(f => { if ((o[f] || '') !== (base[f] || '')) diff[f] = o[f]; });
+    if (Object.keys(diff).length) eventInfo[k] = diff; else delete eventInfo[k];
+  }
+}
+async function loadEventInfo() {
+  try { const r = await sGet('v3:eventinfo'); eventInfo = r ? JSON.parse(r) : {}; } catch (e) { eventInfo = {}; }
+  scrubEventInfo();
+}
 async function saveEventInfo() { await sSet('v3:eventinfo', JSON.stringify(eventInfo)); }
 /* Base info, then the active syllabus's own profile for that id (the short
    course renumbers sorties, so e.g. its BFM-5 flies the BFM-7 profile), then
@@ -2531,6 +2546,7 @@ export async function applyCharts(charts, opts) {
   await sSet(kSyls(course), JSON.stringify(CUSTOMS));
   if (charts.eventInfo) {
     for (const k in charts.eventInfo) eventInfo[k] = Object.assign({}, eventInfo[k] || {}, charts.eventInfo[k]);
+    scrubEventInfo(); /* the file carries the whole table; keep only real edits */
     await saveEventInfo();
   }
   await saveSylPrefs(); await saveSylOrder();
