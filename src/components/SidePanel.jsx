@@ -141,6 +141,10 @@ export default function SidePanel({ zoom }) {
 
   return (
     <div className={cls} id="side" ref={ref} style={style}>
+      {/* Only the cards are scaled. The lull pop-ups stay outside: a zoomed
+          ancestor shifts a position:fixed child's origin and they would land
+          in the wrong place. */}
+      <div className="sidescale">
       <div className="card c-students">
         <h3>Students <button className="sm" id="addStu" onClick={core.addStudent}>+ Add</button></h3>
         <div className="chips">
@@ -272,6 +276,7 @@ export default function SidePanel({ zoom }) {
           <button className="sm" id="copyLullBtn" disabled={core.roster.length < 2}
             title="Copy these periods onto other students" onClick={() => core.openLullCopy(s)}>⧉ Copy to…</button>
         </div>
+      </div>
       </div>
       {core.lullPick ? <LullCalendar /> : null}
       {core.lullCopy ? <LullCopy /> : null}

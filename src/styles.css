@@ -240,7 +240,11 @@ small.hint{color:var(--muted);font-size:11px}
     both columns — a dd/mm/yyyy field needs ~124px and a column is ~183px. */
  /* stretch, not start: two cards side by side should be the same height, or the
     shorter one looks like a mistake. The row is as tall as its taller card. */
- .side{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px;align-content:start;align-items:stretch}
+ /* The user asked for the old 80% view to BE 100%: they preferred it, and it
+    gives the date fields room. The zoom control still reads 100% because it
+    scales this on top of the baseline. */
+ .sidescale{zoom:.8;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px;align-content:start;align-items:stretch}
+ .side{display:block}
  /* Every card goes narrow and pairs off. Keeping the date-holding cards full
     width left 1151px against 754 of screen; pairing Currency with Pace alone is
     worth ~180 of that. A column is 183px and a compact dd/mm/yyyy needs ~124,
@@ -258,7 +262,11 @@ small.hint{color:var(--muted);font-size:11px}
  .kvGrid .kv,.curKv .kv{border-bottom:0}
  .flexPair{display:grid;gap:5px;margin-top:6px}
  .side{font-size:11.5px}
- input[type=date]{font-size:11px;padding:5px 3px}
+ /* iOS renders a date field far wider than Chromium and will not shrink one
+    that keeps its native appearance, which is why END DATE B ran off the right
+    on a real phone while every desktop measurement said it fitted. */
+ input[type=date]{font-size:11px;padding:5px 2px;min-width:0;-webkit-appearance:none;appearance:none}
+ .paceGrid .o,.curGrid .field{min-width:0}
  .big{gap:4px}.big .num{padding:3px;min-width:0}
  /* Headings that name the student, and the parenthetical hints, wrap onto two
     and three lines in a 183px card. The student is named in the top bar. */
@@ -295,10 +303,10 @@ small.hint{color:var(--muted);font-size:11px}
  .keyball svg{width:100%;height:auto}
  .keyball{line-height:0}
  .card.wide .curKv{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
- /* Three pace boxes across fit here and not on the desktop panel: this card is
-    the full 373px of phone, where the desktop one is 301px. */
- .card.wide .paceGrid{grid-template-columns:repeat(3,minmax(0,1fr))}
- .card.wide .paceGrid>.o:first-child{grid-column:auto}
+ /* Two across, not three: a third of the card was enough for Chromium and not
+    for iOS, where END DATE B ran off the right on a real phone. Half the card
+    each gives ~50% more room and cannot depend on how one engine sizes a native
+    date field. The height it costs is affordable now the panel is at .8. */
  .paceRow{flex-direction:column;align-items:flex-start;gap:0}
  /* Headroom: at exactly the screen height a third student would start it
     scrolling again. */

@@ -799,6 +799,28 @@ const phoneFit = await pg.evaluate(() => {
 ok('every statistic but lull periods fits one phone screen, no pinching',
   phoneFit.aboveLull <= phoneFit.screenH,
   `${phoneFit.aboveLull}px in ${phoneFit.screenH}px — ` + phoneFit.cards.join(', '));
+/* END DATE B ran off the right on a real iPhone while every Chromium
+   measurement said it fitted: iOS sizes a native date field far wider and will
+   not shrink one below its intrinsic width. Safari's engine cannot be installed
+   here, so this guards the cause — give each date box enough room that no
+   engine's idea of "minimum" can overflow it — rather than the symptom. */
+const dateRoom = await pg.evaluate(() => {
+  const card = [...document.querySelectorAll('#side .card')]
+    .find(c => /pace/i.test((c.querySelector('h3') || {}).textContent || ''));
+  const cr = card.getBoundingClientRect();
+  const ins = [...card.querySelectorAll('input[type=date]')].map(i => i.getBoundingClientRect());
+  return { widths: ins.map(r => Math.round(r.width)),
+           pastCard: Math.round(Math.max(...ins.map(r => r.right)) - cr.right) };
+});
+ok('each end-date box has room for a full date field',
+  Math.min(...dateRoom.widths) >= 140, dateRoom.widths.join(', ') + 'px wide');
+ok('no end-date box runs past its card', dateRoom.pastCard <= 0, dateRoom.pastCard + 'px past');
+
+/* The panel opens at what used to be 80% — the user preferred it — while the
+   control still reads 100%, because the baseline scales underneath it. */
+ok('the info panel opens at 100% on its new baseline',
+  (await pg.textContent('#szPct')).trim() === '100%', await pg.textContent('#szPct'));
+
 /* Lull periods last, as asked — anything else stranded down there is a mistake. */
 ok('lull periods is the card that sits below the rest', await pg.evaluate(() => {
   const s = document.getElementById('side');
