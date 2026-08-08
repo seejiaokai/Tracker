@@ -1080,6 +1080,36 @@ const txSimWrong = Object.entries(TX_SIMS).filter(([id, want]) =>
 ok('Tx shares 2026\'s simulator ordering', txSimWrong.length === 0,
   txSimWrong.map(([id]) => `${id}=[${(txById[id]?.prereqs || []).join(',')}]`).join(' | '));
 
+/* The short course flies 31 sorties to the long course's 39, and its own tables
+   list DAAR and NAAR among them — the app had 29 and neither. Added at the
+   user's request in the same four-event form as 2026, not the single DAAR/NAAR
+   box the map draws. */
+const TX_REFRESHER = {
+  'DAAR-1': ['AAS-04', 'INT(S)-2', 'TR-4'],
+  'DAAR-2': ['DAAR-1'],
+  'NAAR-1': ['NTR-2'],
+  'NAAR-2': ['NAAR-1'],
+  'ST-18': ['SAT-1', 'SATN-1', 'DAAR-2', 'NAAR-2'],
+};
+const txRefWrong = Object.entries(TX_REFRESHER).filter(([id, want]) =>
+  JSON.stringify((txById[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+ok('Tx carries the DAAR / NAAR refresher chain', txRefWrong.length === 0,
+  txRefWrong.map(([id]) => `${id}=${txById[id] ? '[' + (txById[id].prereqs || []).join(',') + ']' : 'MISSING'}`).join(' | '));
+/* LAYOUTS_FOR_LINES is the same module; DEFAULT_LAYOUTS is not imported until
+   further down this file. An event with no position falls back to the automatic
+   layout and lands somewhere arbitrary. */
+ok('every Tx refresher event has a place on the chart',
+  ['DAAR-1', 'DAAR-2', 'NAAR-1', 'NAAR-2']
+    .every(id => typeof LAYOUTS_FOR_LINES['Tx 2026'][id]?.x === 'number'));
+
+/* SA-1 waited on LASDT-2, a stand-in for the cut DCA-1. DCA-1 sits behind TI-3,
+   which sits behind TI-2, so TI-2 is the real bridge — and it stops the two TI
+   sorties leading nowhere. */
+ok('Tx SA-1 bridges to TI-2, not LASDT-2', (() => {
+  const p = txById['SA-1']?.prereqs || [];
+  return p.includes('TI-2') && !p.includes('LASDT-2') && (txById['TI-2']?.prereqs || []).includes('TI-1');
+})(), `SA-1=[${(txById['SA-1']?.prereqs || []).join(',')}] TI-2=[${(txById['TI-2']?.prereqs || []).join(',')}]`);
+
 /* NTR-1 waits on SA-4 in the 2026 map AND in the short course's own table. */
 ok('Tx NTR-1 waits for SA-4', JSON.stringify((txById['NTR-1']?.prereqs || []).slice().sort())
   === JSON.stringify(['NTR(S)-1', 'SA-4']), `[${(txById['NTR-1']?.prereqs || []).join(',')}]`);
@@ -1178,13 +1208,12 @@ ok('A/G - A/A prereqs match its own course map', wrongAG.length === 0,
 /* Each syllabus should funnel to one final event. A second endpoint means
    something is dangling off the end of the chart, which is how the missing
    B-32 tail showed up: A/G - A/A stopped dead at TI-3. */
-/* Tx 2026 went 2 -> 3. AGR-01 is an academic and was waiting on TI-2, a flight;
-   2026 and the map both have it waiting on T-10, so it was corrected — which
-   left TI-2 dangling beside TI-1. Both TI sorties now gate nothing in the short
-   course, because the events that consumed them (TI-3, DCA-1) are cut and its
-   own table hangs SA-1 off DCA-1. Nothing unlocks early; the TI sorties simply
-   lead nowhere. Reconnecting them is a syllabus decision for the user. */
-const ENDPOINTS = { '2026': 1, 'A/G - A/A 2026': 1, 'Tx 2026': 3, 'Tx 2024': 2, '2024': 6 };
+/* Tx 2026 funnels to one event now. It briefly had three: correcting AGR-01 (an
+   academic that was waiting on TI-2, a flight) left both TI sorties gating
+   nothing, because the events that consumed them — TI-3 and DCA-1 — are cut from
+   the short course. At the user's direction SA-1 now waits on TI-2, which is the
+   real bridge behind the cut DCA-1, and TI-2 takes TI-1 as it does in 2026. */
+const ENDPOINTS = { '2026': 1, 'A/G - A/A 2026': 1, 'Tx 2026': 1, 'Tx 2024': 2, '2024': 6 };
 const ends = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const used = new Set(syl.flatMap(e => e.prereqs || []));
@@ -1211,10 +1240,12 @@ const SPAN_LIMIT = 1000;
    and the DAAR-1->DAAR-2 spine (5428px). The spine is long by design — it mirrors A/G - A/A,
    where the same chain runs down the far-left column, and the map itself draws DAAR as a
    full-height spine across eight pages. */
-/* Tx 2026 went 3 -> 4 with the same AGR-01 correction: T-10 and AGR-01 sit far
-   apart in that layout, so the right link draws a 2300px arrow. Link right,
-   routing ugly — recorded, not hidden. */
-const SPAN_BASELINE = { '2024': 0, '2026': 5, 'Tx 2026': 4, 'A/G - A/A 2026': 10, 'Tx 2024': 3 };
+/* Tx 2026 went 3 -> 7. One is the AGR-01 correction: T-10 and AGR-01 sit far
+   apart in that layout, so the right link draws a 2300px arrow. The other three
+   are the refresher chain, which did exactly the same to 2026 (2 -> 5) — the
+   DAAR spine runs the height of the chart by design, as the map draws it. Links
+   right, routing ugly; recorded rather than hidden. */
+const SPAN_BASELINE = { '2024': 0, '2026': 5, 'Tx 2026': 7, 'A/G - A/A 2026': 10, 'Tx 2024': 3 };
 const stretched = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const L = DEFAULT_LAYOUTS[name]; if (!L) continue;
