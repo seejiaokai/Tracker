@@ -145,10 +145,11 @@ marking, so the app looked like it had nothing to save when it did.
   `SAT(S)-1` applies). Pinned by `TX_SAT1`.
 - **`SA(S)-3` on Tx** — document contradicts itself (sheet: unnumbered; Tx table: required
   by `SA-2`/`SA-3`). **User chose keep, twice, 8 Aug.** It now hangs off the sim chain only.
-- **The user's own 2026 became the baked default, 8 Aug** — their saved file's nine hand
-  edits plus 39 repositioned balls and redrawn wires (see `USER_EDITS_2026` in `smoke.mjs`;
-  they supersede the map pins). Tx 2026 mirrors those edits (`TX_MIRROR`), except `SA-5`,
-  which keeps the doc-stated `[SA-4, SA(S)-6, SA(S)-7]`. `ST-10` now dangles by design.
+- **The user's own 2026 became the baked default, 8 Aug** — their saved file's hand edits
+  plus 39 repositioned balls and redrawn wires (see `USER_EDITS_2026` in `smoke.mjs`; they
+  supersede the map pins). Tx 2026 mirrors those edits (`TX_MIRROR`), except `SA-5`, which
+  keeps the doc-stated `[SA-4, SA(S)-6, SA(S)-7]`. One edit they recalled the same day:
+  `ST-10` feeds `LASDT(S)-1` again, as the map draws it.
 - **Detail bubbles are per-syllabus now.** `EVENT_INFO_BY_SYL['Tx 2026']` carries the
   renumbered profiles (Tx `BFM-5` = BCTM `BFM-7`, `SA-5` = `SA-6` crew-solo, `TI-2` =
   8-ship `TI-3`, `LASDT-2` = `LASDT-3`, `TR-5(P)` = IRT `UP / IRE`), merged in `infoFor`

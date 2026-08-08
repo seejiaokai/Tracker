@@ -1201,13 +1201,14 @@ for (const [name, lay] of Object.entries(LAYOUTS_FOR_LINES)) {
 }
 ok('no drawn link claims a prerequisite the syllabus does not have', phantom.length === 0, phantom.join(', '));
 
-/* The user's own nine hand edits to 2026, made in the app and merged from their
+/* The user's own hand edits to 2026, made in the app and merged from their
    saved file on 8 Aug 2026. These deliberately depart from the document and
-   SUPERSEDE the map/table pins below wherever they name the same event. */
+   SUPERSEDE the map/table pins below wherever they name the same event.
+   (Their file also cut ST-10 out of LASDT(S)-1; they called that a mistake
+   the same day, so that one link went back in and is NOT listed here.) */
 const USER_EDITS_2026 = {
   'AVI-03': ['AVI-01'], 'AVI-04': ['AVI-01'],
   'ACM-3': ['ACM-2'],
-  'LASDT(S)-1': ['AAM-09', 'INT(S)-4', 'OPS-05'],
   'SA-2': ['SA-1'], 'SA-3': ['SA-2'],
   'DAAR-1': ['INT(S)-2', 'TR-4'],
   'NAAR-1': ['DAAR-2', 'NTR-2'],
@@ -1217,7 +1218,7 @@ const USER_EDITS_2026 = {
   const byu = Object.fromEntries(SYLLABI['2026'].map(e => [e.id, e]));
   const bad = Object.entries(USER_EDITS_2026).filter(([id, want]) =>
     JSON.stringify((byu[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
-  ok('the user\'s nine 2026 hand edits hold', bad.length === 0,
+  ok('the user\'s 2026 hand edits hold', bad.length === 0,
     bad.map(([id]) => `${id}=[${(byu[id]?.prereqs || []).join(',')}]`).join(' | '));
 }
 
@@ -1409,13 +1410,13 @@ ok('Tx keeps SA(S)-3 inside the sim chain', (() => {
   return has && (txById['SA(S)-4']?.prereqs || []).includes('SA(S)-3');
 })(), `present=${SYLLABI['Tx 2026'].some(e => e.id === 'SA(S)-3')} SA(S)-4=[${(txById['SA(S)-4']?.prereqs || []).join(',')}]`);
 
-/* The user's nine 2026 hand edits, mirrored onto the short course (the DAAR /
+/* The user's 2026 hand edits, mirrored onto the short course (the DAAR /
    NAAR / ST-18 part is pinned by TX_REFRESHER above; academics by the
    match-2026 check). SA-5 deliberately does NOT mirror: the Tx module states
    [SA-4, SA(S)-6, SA(S)-7] in words, so the document's own value stands. */
 const TX_MIRROR = {
   'ACM-3': ['ACM-2'],
-  'LASDT(S)-1': ['AAM-09', 'INT(S)-4', 'OPS-05'],
+  'LASDT(S)-1': ['AAM-09', 'INT(S)-4', 'OPS-05', 'ST-10'],
   'SA-2': ['SA-1'], 'SA-3': ['SA-2'],
   'SA-5': ['SA(S)-6', 'SA(S)-7', 'SA-4'],
 };
@@ -1561,10 +1562,7 @@ ok('A/G - A/A prereqs match its own course map', wrongAG.length === 0,
    nothing, because the events that consumed them — TI-3 and DCA-1 — are cut from
    the short course. At the user's direction SA-1 now waits on TI-2, which is the
    real bridge behind the cut DCA-1, and TI-2 takes TI-1 as it does in 2026. */
-/* 2026 and Tx 2026 gained a second loose end on 8 Aug: the user's own edit cut
-   the ST-10 phase brief's only outgoing link (LASDT(S)-1 no longer waits on it),
-   so ST-10 now hangs free by design. */
-const ENDPOINTS = { '2026': 2, 'A/G - A/A 2026': 1, 'Tx 2026': 2, 'Tx 2024': 2, '2024': 6 };
+const ENDPOINTS = { '2026': 1, 'A/G - A/A 2026': 1, 'Tx 2026': 1, 'Tx 2024': 2, '2024': 6 };
 const ends = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const used = new Set(syl.flatMap(e => e.prereqs || []));
