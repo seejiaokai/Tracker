@@ -309,7 +309,11 @@ async function migrateRosters(c) {
     await sSet(kRosterMig(c), '1');
   } catch (_) {}
 }
-async function loadCourse(c) {
+/* restoreLastSyllabus is OFF by default and ON only from init(). loadCourse
+   also runs when the user picks a syllabus themselves, and restoring there
+   overwrote their choice the instant they made it — so on any course where
+   something had been marked, the syllabus could not be changed at all. */
+async function loadCourse(c, restoreLastSyllabus = false) {
   loading = true;
   course = c;
   const pr = await sGet(kPlan(c)); plan = pr ? JSON.parse(pr) : { lulls: [], mode: 'pace', epw: 2, target: null, sylName: DEFAULT_SYL_NAME, custom: false };
@@ -337,9 +341,10 @@ async function loadCourse(c) {
   /* rename migration: legacy syllabus names -> 2026 */
   if (SYL_RENAME[plan.sylName]) { plan.__oldSyl = plan.sylName; plan.sylName = SYL_RENAME[plan.sylName]; await savePlan(); }
   /* Open on whatever was last marked. Done here, before the roster and layout
-     load, so it costs no second pass and writes nothing. */
+     load, so it costs no second pass and writes nothing. Only when the app is
+     starting: everywhere else the caller has already decided the syllabus. */
   const __lastS = await sGet(kLastStudent(c));
-  if (__lastS) {
+  if (__lastS && restoreLastSyllabus) {
     try {
       const rec = JSON.parse(await sGet(kLast(c, __lastS)) || 'null');
       if (rec && rec.syl && sylSource(rec.syl)) plan.sylName = rec.syl;
@@ -2058,7 +2063,9 @@ export async function restoreHiddenSyl(n) {
   setSaveStatus('restored built-in “' + n + '”', 'ok');
 }
 export async function switchCourse(v) {
-  await loadCourse(v); refreshCourses(); refreshSyl(); refreshActive(); renderBoard(); renderSide();
+  /* Picking a different course is like opening the app on it, so it does
+     restore that course's last-marked syllabus. Picking a syllabus does not. */
+  await loadCourse(v, true); refreshCourses(); refreshSyl(); refreshActive(); renderBoard(); renderSide();
 }
 export async function addCourse() {
   const v = ((await uiPrompt('New course name (e.g. 26BBSG):')) || '').trim().toUpperCase(); if (!v) return;
@@ -2735,7 +2742,7 @@ export async function init() {
   await applyBundle();
   await loadCourses();
   await loadSylPrefs();
-  await loadCourse(COURSES[0]); await loadEventInfo(); await loadSylOrder();
+  await loadCourse(COURSES[0], true); await loadEventInfo(); await loadSylOrder();
   ready = true;
   refreshCourses(); refreshSyl(); refreshActive(); renderBoard(); renderSide();
   /* After the first paint, so the balls exist to measure. */

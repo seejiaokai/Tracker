@@ -1033,6 +1033,25 @@ ok('opening the app lands on the last event marked, not at the top of the chart'
   landed.found && landed.inView && landed.scrollTop > 100,
   `${deep.id}: scrolled ${landed.scrollTop}px, in view ${landed.found ? landed.inView : 'n/a'}`);
 
+/* THE SYLLABUS MUST STILL BE CHANGEABLE AFTER MARKING. Restoring the last-marked
+   syllabus ran on every loadCourse — including the one the user's own syllabus
+   choice triggers — so it overwrote that choice the instant it was made, and on
+   any course with a mark on it the syllabus was stuck. The block above marks an
+   event, so this is exactly the state that broke. */
+{
+  const before = await pg.inputValue('#sylSel');
+  const others = (await pg.evaluate(() => [...document.querySelectorAll('#sylSel option')].map(o => o.value)))
+    .filter(v => v !== before);
+  const stuck = [];
+  for (const target of others.slice(0, 2)) {
+    await pg.selectOption('#sylSel', target); await pg.waitForTimeout(900);
+    if ((await pg.inputValue('#sylSel')) !== target) stuck.push(target);
+  }
+  ok('the syllabus can still be changed on a course that has marks', stuck.length === 0,
+    stuck.length ? `asked for ${stuck.join(', ')} and stayed on ${await pg.inputValue('#sylSel')}` : '');
+  await pg.selectOption('#sylSel', before); await pg.waitForTimeout(900);
+}
+
 /* Switching student jumps to that student's own last mark. */
 const two = await pg.evaluate(() => [...document.querySelectorAll('#activeSel option')].map(o => o.value));
 /* Whoever the app came back on is the one who did the marking — not
