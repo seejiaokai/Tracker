@@ -100,10 +100,9 @@ values for the renumbered sorties) and the two `TRAINING CURRICULUM TRACK SHEET`
 (the authoritative event list per course).
 
 **The track sheet's serial-number column is the membership test.** Both sheets print all
-209 rows; a row with **no S/N** is one that course does not do. Tx leaves 14 blank —
-3 removed-from-syllabus plus `TR-6(P)`, `BFM-6`, `BFM-7`, a `LASDT`, `DCA(S)-1`, `DCA-1`,
-`TI-3`, `SA(S)-3`, `SA-6`, `SAT(S)-2`, `SAT-2`. Parse rows by looking *back* for the S/N;
-a numbered-runs-only parse silently drops every blank row and misreads the course.
+209 rows; a row with **no S/N** is one that course does not do (Tx leaves 14 blank —
+`V2_REMOVED` plus `SA(S)-3` and the 3 removed-from-syllabus). Parse rows by looking *back*
+for the S/N; a numbered-runs-only parse silently drops every blank row.
 
 Tx renumbers, with `(BCTM …)` naming the long-course equivalent — `SA-05 (BCTM SA-6)`,
 `TI-01 (BCTM TI-1, TI-2)`, `BFM-05 (BCTM BFM-7)`. **Both syllabi were verified event-for-
@@ -169,21 +168,13 @@ marking, so the app looked like it had nothing to save when it did.
 
 ## The traps
 
-Nine checks passed against code that did not have the fix in it. All the same shape:
-
-| What it measured | Why it could not fail |
-|---|---|
-| Header buttons added by edit mode | Counted nodes that are merely `display:none` |
-| "Is ST-01 reachable" | Which event sits under the toolbar depends on the pan an earlier check left |
-| "Marking as" wrapping | Depends on how long the course name happens to be |
-| Room below the last event | That chart happened to end with 451px of empty layout |
-| Lull periods per student | The in-memory map is keyed by student either way — needs a **reload** |
-| Opening on the last mark ×3 | Ran against a four-event syllabus, whose roster was empty, so grading was a no-op |
-| Switching student jumps | Read the same scroll position twice without moving the board |
-
-Two rules that would have caught all nine: **assert the value is present, not merely
-unchanged**, and **make the check fail on purpose before believing it.** Making `kLulls`
-return one shared key, and watching the per-student check keep passing, is what exposed
+Nine checks once passed against code that did not have the fix in it — counting
+`display:none` nodes, reading a scroll position twice without moving, grading an
+empty roster (a no-op), measuring a chart that happened to have slack, or checking
+an in-memory map that only breaks after a **reload**. Two rules would have caught
+all nine: **assert the value is present, not merely unchanged**, and **make the
+check fail on purpose before believing it.** Making `kLulls` return one shared
+key, and watching the per-student check keep passing, is what exposed
 the reload problem.
 
 ## Things that will bite you
