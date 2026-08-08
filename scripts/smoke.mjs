@@ -799,22 +799,45 @@ const phoneFit = await pg.evaluate(() => {
 ok('every statistic but lull periods fits one phone screen, no pinching',
   phoneFit.aboveLull <= phoneFit.screenH,
   `${phoneFit.aboveLull}px in ${phoneFit.screenH}px — ` + phoneFit.cards.join(', '));
-/* END DATE B ran off the right on a real iPhone while every Chromium
-   measurement said it fitted: iOS sizes a native date field far wider and will
-   not shrink one below its intrinsic width. Safari's engine cannot be installed
-   here, so this guards the cause — give each date box enough room that no
-   engine's idea of "minimum" can overflow it — rather than the symptom. */
+/* Set pace, End date A and End date B share ONE row — the user asked for that
+   layout back after a stacked version shipped. END DATE B had also run off the
+   right on a real iPhone while every Chromium measurement said it fitted: iOS
+   sizes a native date field wider and will not shrink one below its intrinsic
+   width. Safari's engine cannot be installed here, so the width check guards the
+   cause — leave room no engine's idea of "minimum" can eat — not the symptom. */
 const dateRoom = await pg.evaluate(() => {
   const card = [...document.querySelectorAll('#side .card')]
     .find(c => /pace/i.test((c.querySelector('h3') || {}).textContent || ''));
   const cr = card.getBoundingClientRect();
-  const ins = [...card.querySelectorAll('input[type=date]')].map(i => i.getBoundingClientRect());
-  return { widths: ins.map(r => Math.round(r.width)),
-           pastCard: Math.round(Math.max(...ins.map(r => r.right)) - cr.right) };
+  const ins = [...card.querySelectorAll('input[type=date]')];
+  /* What a whole date costs in THIS engine, so the margin is a ratio and not a
+     number that only means something in Chromium. */
+  const probe = document.createElement('span');
+  probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font:'
+    + getComputedStyle(ins[0]).font;
+  probe.textContent = '00/00/0000';
+  card.appendChild(probe);
+  const need = probe.getBoundingClientRect().width;
+  probe.remove();
+  const cells = [...card.querySelectorAll('.paceGrid>.o')];
+  return {
+    need: Math.round(need),
+    widths: ins.map(i => Math.round(i.getBoundingClientRect().width)),
+    rows: new Set(cells.map(o => Math.round(o.getBoundingClientRect().top))).size,
+    cells: cells.length,
+    pastCell: Math.max(...ins.map(i =>
+      Math.round(i.getBoundingClientRect().right - i.parentElement.getBoundingClientRect().right))),
+    pastCard: Math.round(Math.max(...ins.map(i => i.getBoundingClientRect().right)) - cr.right),
+  };
 });
-ok('each end-date box has room for a full date field',
-  Math.min(...dateRoom.widths) >= 140, dateRoom.widths.join(', ') + 'px wide');
-ok('no end-date box runs past its card', dateRoom.pastCard <= 0, dateRoom.pastCard + 'px past');
+ok('set pace and both end dates sit on one row', dateRoom.rows === 1 && dateRoom.cells === 3,
+  `${dateRoom.cells} boxes on ${dateRoom.rows} row(s)`);
+ok('each end-date box leaves half again the room a date needs',
+  Math.min(...dateRoom.widths) >= dateRoom.need * 1.5,
+  `${dateRoom.widths.join(', ')}px wide, a date needs ${dateRoom.need}px`);
+ok('no end-date box runs past its own box or its card',
+  dateRoom.pastCell <= 0 && dateRoom.pastCard <= 0,
+  `${dateRoom.pastCell}px past its box, ${dateRoom.pastCard}px past the card`);
 
 /* The panel opens at what used to be 80% — the user preferred it — while the
    control still reads 100%, because the baseline scales underneath it. */

@@ -292,7 +292,20 @@ small.hint{color:var(--muted);font-size:11px}
  .card h3{margin:0 0 4px;font-size:10px}
  .kv{padding:0;line-height:1.5}
  .bar{margin:2px 0 5px;height:6px}
- .paceGrid{gap:5px}
+ /* Set pace, End date A and End date B back on ONE row, which is the layout the
+    user asked to keep. It stopped fitting when the three sat in a 301px panel;
+    the card is full width here and the whole panel is scaled to 80%, so there
+    are now ~470 units to share and each box gets ~150 for a ~124 date field.
+    The field is centred and stops short of the cell edge, because iOS draws a
+    date value wider than any desktop measurement predicts. */
+ .paceGrid{gap:5px;grid-template-columns:repeat(3,minmax(0,1fr))}
+ .paceGrid>.o:first-child{grid-column:auto}
+ .paceGrid input[type=date]{width:100%;margin:0;display:block;text-align:center}
+ /* iOS lays the value out in its own inner box that ignores text-align and
+    keeps its natural width, which is how a date ran past the right edge while
+    every measurement said the field itself fitted. */
+ input[type=date]::-webkit-date-and-time-value{width:100%;margin:0;text-align:center}
+ .paceGrid>.o:not(:first-child){text-align:center}
  .paceGrid .o{padding:4px}
  .paceGrid .o .t{margin-bottom:2px}
  .paceRow .r,.opt2 .o .r{font-size:14px}

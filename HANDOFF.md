@@ -1,4 +1,4 @@
-# Handoff: OCU Progress Tracker — 7 Aug 2026 (evening)
+# Handoff: OCU Progress Tracker — 8 Aug 2026
 
 ## Read this first
 
@@ -21,9 +21,24 @@ date may enter it. Two smoke checks enforce this.
 
 ## Where things stand
 
-`main` and `claude/read-handoff-tyugyx` are level. `npm run smoke` is **139 checks, green**.
-All five interface packages are merged and verified live except the last, which was still
+`main` and `claude/read-handoff-tyugyx` are level. `npm run smoke` is **163 checks, green**.
+All five interface packages are merged and verified live. The last commit was still
 publishing at handoff — **run `npm run live` and look at the screenshot before anything else.**
+
+### Fixed after the user tested it live (8 Aug)
+
+| Reported | Cause |
+|---|---|
+| Phone menus dead | Panels were clipped by the sideways-scrolling header; now `position:fixed`, placed by JS |
+| Pace stuck at 2 | `parseFloat(v) \|\| 2` turned the empty box into 2; the raw text is stored now and coerced only for arithmetic |
+| Each student must be independent | Pace, both end dates and lull periods are per student (`v3:<course>:pace:<student>`, `:lulls:<student>`) |
+| **Syllabus could not be changed on a course that had marks** | "Open on the last-marked syllabus" ran on *every* `loadCourse`, including the one the user's own choice triggers, so it overwrote that choice instantly. Now opt-in: `init()` and `switchCourse` only |
+| End dates ran off the right on the phone | Panel now opens at what used to be 80%, and the three pace boxes sit on one row with centred, contained date fields |
+
+**Not reproduced: the "ACG-06 puck snapping" report.** Edit → Show All Details moved zero
+balls, wrote no layout keys and raised no save button. Best theory: the syllabus was
+flipping back under them, so a ball belonging to the other chart looked like it had jumped.
+Ask them to try again now the flipping has stopped.
 
 ### What shipped
 
@@ -100,21 +115,16 @@ marking, so the app looked like it had nothing to save when it did.
 
 ### Worth raising with them
 
-- Everything fits one phone screen with **60px to spare, with two students**. A third or
-  fourth student will start it scrolling again. Ask before spending more on it.
-- The student key-ball diagram is down to 58px on a phone. It is a legend, not data, but
-  it is small — ask whether they would rather it moved below the calendar.
+- Everything fits one phone screen with room to spare **at two students**. The user is
+  already running four on one course; a fifth may start it scrolling. Ask before spending
+  more on it.
 - Switching student scrolls to their last mark but does **not** switch syllabus. Switching
   under them would be a surprise and would prompt about unsaved flow edits.
-- **Tx: `TI-1` and `TI-2` now gate nothing.** The events that consumed them (`TI-3`,
-  `DCA-1`) are cut from the short course, and its own table hangs `SA-1` off `DCA-1`.
-  Nothing unlocks early — the TI sorties just lead nowhere. Bridging `SA-1` to `TI-2` is
-  the obvious fix but it is their syllabus decision.
-- **Tx is missing `DAAR` and `NAAR`.** The document's Tx tables list 31 sorties including
-  both; the app has 29. Adding them needs layout positions too.
-- **Tx `SA-1`, `SAT-1`, `SA(S)-1`, `NTR(S)-1`, `SA-5`** still differ from 2026 in ways that
-  are defensible either way — each involves an event the short course cuts. Listed with
-  evidence in the final report of that session.
+- **Tx `SAT-1`** — recommended and not yet done: make it wait for `SA-5` as well as
+  `SAT(S)-1`. Their syllabus decision, so it needs their word.
+- **Tx `SA-1`, `SA(S)-1`, `NTR(S)-1`, `SA-5`** still differ from 2026 in ways that are
+  defensible either way — each involves an event the short course cuts. Deliberately left
+  alone. (`SA-1`→`TI-2` and the four `DAAR`/`NAAR` refreshers are done, at their request.)
 
 ## The traps
 
@@ -154,5 +164,5 @@ the reload problem.
 
 ## Testing
 
-`npm run smoke` — 139 checks, must be green before every commit touching `src/`.
+`npm run smoke` — 163 checks, must be green before every commit touching `src/`.
 `npm run live` — the deployed site, after the Pages run finishes. Never call a branch "live".
