@@ -214,7 +214,9 @@ small.hint{color:var(--muted);font-size:11px}
 /* Grouping for the 22 controls that used to wrap onto six rows at 1440.
    z-index 50: over the board and the sticky view tabs (35), under .modal (60). */
 .menu{position:relative;display:inline-flex}
-.menupanel{position:absolute;top:calc(100% + 5px);left:0;z-index:50;min-width:200px;display:none;flex-direction:column;gap:4px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:0 12px 32px rgba(0,0,0,.6)}
+/* fixed, not absolute: the phone header scrolls sideways and an overflow
+   container clips its own absolutely positioned children. Placed by Header.jsx. */
+.menupanel{position:fixed;z-index:50;width:200px;overflow:auto;display:none;flex-direction:column;gap:4px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:0 12px 32px rgba(0,0,0,.6)}
 .menupanel.on{display:flex}
 .menupanel button{text-align:left;width:100%}
 .menupanel label.sub{display:flex;align-items:center;gap:7px;padding:2px 4px}
@@ -233,7 +235,6 @@ small.hint{color:var(--muted);font-size:11px}
  .curKv{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:12px}
  .curKv .kv{border-bottom:0;padding:2px 0}
  /* The student key-ball diagram is the single biggest card on the phone. */
- .keyball svg{width:104px;height:88px}
  /* Two columns. Density alone got 2133px down to 1458 against ~620px of screen;
     only pairing the cards closes a gap that size. Cards holding date boxes span
     both columns — a dd/mm/yyyy field needs ~124px and a column is ~183px. */
@@ -246,15 +247,17 @@ small.hint{color:var(--muted);font-size:11px}
     width, where their fields go two across instead of stacking four deep. A
     183px column is too narrow for a dd/mm/yyyy field to sit beside anything. */
  .card.wide{grid-column:1/-1}
- .c-overall{order:1}.c-students{order:2}.c-next{order:3}.c-plan{order:4}
- .c-curr{order:5}.c-pace{order:6}.c-lull{order:7}
+ /* Five narrow cards means one always sits alone on a row, so the SHORTEST goes
+    last. Pairing the two tallest and leaving Plannable now on its own recovers
+    ~49px against leaving Lull periods stranded there. */
+ .c-overall{order:1}.c-students{order:2}.c-next{order:3}.c-lull{order:4}
+ .c-curr{order:5}.c-pace{order:6}.c-plan{order:7}
  .kvGrid,.curKv{grid-template-columns:minmax(0,1fr)}
  .kvGrid .kv,.curKv .kv{border-bottom:0}
  .flexPair{display:grid;gap:5px;margin-top:6px}
  .side{font-size:11.5px}
  input[type=date]{font-size:11px;padding:5px 3px}
  .big{gap:4px}.big .num{padding:3px;min-width:0}
- .keyball svg{width:78px;height:66px}
  /* Headings that name the student, and the parenthetical hints, wrap onto two
     and three lines in a 183px card. The student is named in the top bar. */
  .card h3 .who,.card h3 .mini{display:none}
@@ -285,7 +288,9 @@ small.hint{color:var(--muted);font-size:11px}
  .paceRow .r,.opt2 .o .r{font-size:14px}
  .curGrid{column-gap:8px}
  .chip{padding:1px 6px;font-size:11px}
- .keyball svg{width:58px;height:49px}
+ /* Big enough to read which student is which — that is the whole point of it.
+    It was shrunk to 58px chasing height and became unreadable. */
+ .keyball svg{width:132px;height:112px}
  .keyball{line-height:0}
  .card.wide .curKv{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
  /* Three pace boxes across fit here and not on the desktop panel: this card is
@@ -322,6 +327,5 @@ small.hint{color:var(--muted);font-size:11px}
  .controls{flex-wrap:nowrap;margin-left:0}
  .controls>*{flex:0 0 auto}
  .saveslot{min-width:0}
- .menupanel{max-height:70vh;overflow:auto}
  .legend{display:none}
 }

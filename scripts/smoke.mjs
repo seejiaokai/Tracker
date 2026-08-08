@@ -684,6 +684,39 @@ ok('on a phone the chart fits the screen width, so it only scrolls up and down',
 ok('a phone can scroll well past the end of the chart, clear of the zoom control',
   phoneFlow.roomBelow >= 130, `${phoneFlow.roomBelow}px of padding under the chart`);
 
+/* THE MENUS MUST WORK ON A PHONE. They did not: the phone header scrolls
+   sideways, and an overflow container clips its own absolutely positioned
+   children, so every panel was drawn but cut off at the 41px header and each tap
+   landed on the view tabs underneath. Hit-testing is the only way to see this —
+   the panel reports display:flex and an on-screen box either way. */
+for (const m of ['course', 'syl', 'file', 'view']) {
+  await pg.click(`#${m}MenuBtn`);
+  await pg.waitForTimeout(200);
+  const r = await pg.evaluate(id => {
+    const p = document.getElementById(id + 'MenuPanel');
+    const first = p.querySelector('button, label');
+    if (!first) return { ok: false, why: 'no items' };
+    const b = first.getBoundingClientRect();
+    if (!b.width || !b.height) return { ok: false, why: 'item has no box' };
+    const el = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
+    return { ok: !!(el && p.contains(el)), why: el ? (el.id || el.className || el.tagName) : 'nothing',
+             box: [Math.round(b.x), Math.round(b.y)] };
+  }, m);
+  ok(`the ${m} menu is actually tappable on a phone`, r.ok,
+    r.ok ? '' : `tap at ${JSON.stringify(r.box)} hits ${r.why}`);
+  await pg.keyboard.press('Escape');
+  await pg.waitForTimeout(120);
+}
+
+/* Every syllabus must be reachable from the phone, not just whichever one the
+   app opened on. */
+const sylPhone = await pg.evaluate(() => ({
+  n: document.querySelectorAll('#sylSel option').length,
+  visible: document.getElementById('sylSel').getBoundingClientRect().width > 0,
+}));
+ok('every syllabus is selectable on a phone', sylPhone.n >= 5 && sylPhone.visible,
+  JSON.stringify(sylPhone));
+
 /* Info tab: everything above the calendar has to fit without pinching. */
 await pg.click('.viewtabs button[data-view="info"]');
 await pg.waitForTimeout(600);
@@ -801,6 +834,46 @@ await pg.click('#lullChips .chip'); await pg.waitForSelector('#lullCal.on');
 ok('tapping a period reopens the calendar to change it',
   await pg.locator('#lullCal.on').count() === 1);
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(250);
+/* ---- pace and end dates belong to the student, not the course ----
+   They lived on the course, so every student shared one target and one
+   events-per-week. And the box snapped back to 2 the moment it was cleared:
+   setEpw did `parseFloat(v) || 2`, so the empty string on the way to typing a
+   new number became 2 and the field could never be changed. */
+{
+  const A = roster0[0], B = roster0.find(r => r !== roster0[0]);
+  await pg.selectOption('#activeSel', A); await pg.waitForTimeout(400);
+  await pg.fill('#epwIn', '');
+  await pg.waitForTimeout(250);
+  ok('the pace box can be cleared to type a new number',
+    (await pg.inputValue('#epwIn')) === '', `shows "${await pg.inputValue('#epwIn')}"`);
+  await pg.fill('#epwIn', '3.5'); await pg.waitForTimeout(300);
+  await pg.fill('#targetIn', '2027-03-01'); await pg.waitForTimeout(300);
+  const aPace = await pg.inputValue('#epwIn'), aTgt = await pg.inputValue('#targetIn');
+  ok('a pace typed in stays put', aPace === '3.5', `shows "${aPace}"`);
+
+  await pg.selectOption('#activeSel', B); await pg.waitForTimeout(500);
+  const bPace = await pg.inputValue('#epwIn'), bTgt = await pg.inputValue('#targetIn');
+  ok('a second student has their own pace, not the first one\'s',
+    bPace !== '3.5', `${A}=${aPace} ${B}=${bPace}`);
+  ok('a second student has their own end date',
+    bTgt !== aTgt, `${A}=${aTgt} ${B}=${bTgt}`);
+
+  await pg.selectOption('#activeSel', A); await pg.waitForTimeout(500);
+  ok('switching back returns that student\'s own pace and end date',
+    (await pg.inputValue('#epwIn')) === '3.5' && (await pg.inputValue('#targetIn')) === '2027-03-01',
+    `pace=${await pg.inputValue('#epwIn')} end=${await pg.inputValue('#targetIn')}`);
+
+  /* And it must survive a reload, which is where a per-course store would show. */
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForSelector('#flowSvg .ball'); await pg.waitForTimeout(600);
+  await pg.selectOption('#activeSel', B); await pg.waitForTimeout(500);
+  ok('per-student pace survives a reload',
+    (await pg.inputValue('#epwIn')) !== '3.5', `${B} shows ${await pg.inputValue('#epwIn')}`);
+  await pg.selectOption('#activeSel', A); await pg.waitForTimeout(500);
+  ok('per-student end date survives a reload',
+    (await pg.inputValue('#targetIn')) === '2027-03-01', `${A} shows ${await pg.inputValue('#targetIn')}`);
+}
+
 ok('Escape leaves the period alone rather than half-changing it',
   await pg.locator('#lullCal.on').count() === 0 && await pg.locator('#lullChips .chip').count() === 1);
 

@@ -120,17 +120,19 @@ export default function SidePanel({ zoom }) {
   const fx = core.flexFor(dSyll);
   const cur = core.landingCurrency(effCurr);
 
-  // EPW two options
+  /* Pace and both end dates belong to the student being marked, not the course. */
   const rem = st.remaining;
-  const epw = core.plan.epw || 2;
+  const myPace = core.paceOf(s);
+  const epwRaw = myPace.epw;                 /* exactly what is in the box */
+  const epw = core.epwOf(s);                 /* what the arithmetic uses */
   let projEnd = '—';
   if (rem > 0 && epw > 0) {
     let weeks = rem / epw; let end = new Date(today.getTime() + Math.ceil(weeks * 7) * core.DAY);
     end = new Date(end.getTime() + Math.ceil(core.lullDaysIn(s, today.getTime(), end.getTime())) * core.DAY); projEnd = core.fmt(end);
   }
-  const tgt = core.parseD(core.plan.target); let reqEpw = '—';
+  const tgt = core.parseD(myPace.target); let reqEpw = '—';
   if (tgt) { const wk = (core.daysBetween(today, tgt) - core.lullDaysIn(s, today.getTime(), tgt.getTime())) / 7; reqEpw = wk > 0 ? (rem / wk).toFixed(1) : 'past'; }
-  const tgt2 = core.parseD(core.plan.target2); let reqEpw2 = '—';
+  const tgt2 = core.parseD(myPace.target2); let reqEpw2 = '—';
   if (tgt2) { const wk = (core.daysBetween(today, tgt2) - core.lullDaysIn(s, today.getTime(), tgt2.getTime())) / 7; reqEpw2 = wk > 0 ? (rem / wk).toFixed(1) : 'past'; }
 
   /* plannable now (matches the original inline computation) */
@@ -220,7 +222,7 @@ export default function SidePanel({ zoom }) {
         <div className="mini" style={{ marginTop: 5 }}>Landing currency = days since last currency (minus down days). Flex requirement uses days since last <b>syllabus</b> flight, so updating currency won’t change it.</div>
       </div>
       <div className="card wide c-pace">
-        <h3>Pace &amp; expected end</h3>
+        <h3>Pace &amp; expected end <span className="who">— {s}</span></h3>
         {/* Set pace takes the whole width; the two end dates share the row below.
             Three across needed 419px in a 301px panel and pushed End date B off
             the right edge of the window. */}
@@ -229,7 +231,7 @@ export default function SidePanel({ zoom }) {
             <div className="t">Set pace</div>
             <div className="paceRow">
               <div className="field" style={{ margin: 0 }}>
-                <input type="number" step="0.1" min="0.5" id="epwIn" value={epw} style={{ width: 52 }} onChange={e => core.setEpw(e.target.value)} /> <span className="mini">/wk</span>
+                <input type="number" step="0.1" min="0.5" id="epwIn" value={epwRaw ?? ''} style={{ width: 52 }} onChange={e => core.setEpw(s, e.target.value)} /> <span className="mini">/wk</span>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div className="r">{projEnd}</div><div className="mini">projected end</div>
@@ -238,12 +240,12 @@ export default function SidePanel({ zoom }) {
           </div>
           <div className="o">
             <div className="t">End date A</div>
-            <input type="date" id="targetIn" value={core.plan.target || ''} onChange={e => core.setTarget(e.target.value)} />
+            <input type="date" id="targetIn" value={myPace.target || ''} onChange={e => core.setTarget(s, e.target.value)} />
             <div className="r" style={{ marginTop: 6 }}>{reqEpw}{reqEpw !== '—' && reqEpw !== 'past' ? ' /wk' : ''}</div><div className="mini">req. pace</div>
           </div>
           <div className="o">
             <div className="t">End date B</div>
-            <input type="date" id="targetIn2" value={core.plan.target2 || ''} onChange={e => core.setTarget2(e.target.value)} />
+            <input type="date" id="targetIn2" value={myPace.target2 || ''} onChange={e => core.setTarget2(s, e.target.value)} />
             <div className="r" style={{ marginTop: 6 }}>{reqEpw2}{reqEpw2 !== '—' && reqEpw2 !== 'past' ? ' /wk' : ''}</div><div className="mini">req. pace</div>
           </div>
         </div>

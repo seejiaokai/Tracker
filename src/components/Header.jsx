@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as core from '../app/core.js';
 
 /* The panel is always in the DOM and hidden with CSS, never conditionally
@@ -7,7 +7,29 @@ import * as core from '../app/core.js';
    around a click is exactly how the file-picker gesture got spent before. */
 function Menu({ id, label, title, children }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const [at, setAt] = useState(null);
+  const ref = useRef(null), btn = useRef(null);
+  /* The panel is position:fixed and placed by hand. It used to be absolute
+     inside the button — which works on a desktop and is DEAD on a phone, where
+     the header scrolls sideways: an overflow container clips its own absolutely
+     positioned children, so the panel was drawn but cut off at the 41px header
+     and every tap landed on the view tabs underneath instead. */
+  useLayoutEffect(() => {
+    if (!open || !btn.current) { setAt(null); return; }
+    const place = () => {
+      const r = btn.current.getBoundingClientRect();
+      const w = 200, pad = 6;
+      setAt({
+        left: Math.round(Math.max(pad, Math.min(r.left, innerWidth - w - pad))),
+        top: Math.round(r.bottom + 5),
+        maxHeight: Math.round(innerHeight - r.bottom - 5 - pad),
+      });
+    };
+    place();
+    addEventListener('resize', place);
+    addEventListener('scroll', place, true);
+    return () => { removeEventListener('resize', place); removeEventListener('scroll', place, true); };
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const away = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -18,11 +40,12 @@ function Menu({ id, label, title, children }) {
   }, [open]);
   return (
     <span className="menu" ref={ref}>
-      <button className={'sm' + (open ? ' primary' : '')} id={id + 'MenuBtn'} title={title}
+      <button className={'sm' + (open ? ' primary' : '')} id={id + 'MenuBtn'} title={title} ref={btn}
         aria-expanded={open} onClick={() => setOpen(o => !o)}>{label} ▾</button>
       {/* Closing on bubble, so the item's own handler has already run — the
           file pickers throw if anything awaits before them. */}
       <div className={'menupanel' + (open ? ' on' : '')} id={id + 'MenuPanel'}
+        style={at ? { left: at.left + 'px', top: at.top + 'px', maxHeight: at.maxHeight + 'px' } : undefined}
         onClick={e => { if (e.target.closest('button')) setOpen(false); }}>
         {children}
       </div>

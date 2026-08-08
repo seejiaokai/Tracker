@@ -77,6 +77,7 @@ export let COURSES = [], course = null, active = null;
 export let SYL = [], byid = {}, roster = [], marks = {}, dates = {}, plan = {};
 export let lulls = {};   /* {student: [{start,end}]} for the current course */
 export let lastEdit = {};   /* {student: {syl, event}} for the current course */
+export let pace = {};   /* {student: {epw, target, target2}} for the current course */
 export let calView = new Date();
 /* True while boot migrations and course switches are writing, so they do not
    flag the user's file as having unsaved work. See touched(). */
@@ -134,6 +135,10 @@ const kPlan = c => 'v3:' + c + ':plan';
    they hang off the course and the student — NOT off kDates, which is keyed by
    syllabus and would drop them the moment the user switched. */
 const kLulls = (c, s) => 'v3:' + c + ':lulls:' + s;
+/* Pace and the two end dates, per student. They used to live on the course, so
+   every student on a course shared one target and one events-per-week — which is
+   wrong: students run at their own rate and finish on their own date. */
+const kPace = (c, s) => 'v3:' + c + ':pace:' + s;
 /* Where each student was last marking, so opening the app does not start at the
    top of a 10,000px chart every time. */
 const kLast = (c, s) => 'v3:' + c + ':last:' + s;
@@ -399,7 +404,7 @@ async function saveSyl() { await sSet(kSyl(course), JSON.stringify(SYL)); touche
 async function saveRoster() { await sSet(kRosterFor(course, plan.sylName), JSON.stringify(roster)); touched(); }
 async function savePlan() { await sSet(kPlan(course), JSON.stringify(plan)); touched(); }
 async function loadStudent() {
-  marks = {}; dates = {}; lulls = {}; lastEdit = {};
+  marks = {}; dates = {}; lulls = {}; lastEdit = {}; pace = {};
   for (const s of roster) {
     const m = await sGet(kMarks(course, s)); marks[s] = m ? JSON.parse(m) : {};
     let d = await sGet(kDates(course, s));
@@ -409,12 +414,24 @@ async function loadStudent() {
        original is left in plan.lulls, unread, so an older saved file migrates
        exactly the same way when it is opened. */
     try { lastEdit[s] = JSON.parse(await sGet(kLast(course, s)) || 'null') || null; } catch (_) { lastEdit[s] = null; }
+    /* Everyone inherits the old course-wide pace and end dates the first time.
+       plan.epw / plan.target / plan.target2 are left in place, unread, so an
+       older saved file migrates the same way when it is opened. */
+    let pr = null;
+    try { pr = JSON.parse(await sGet(kPace(course, s)) || 'null'); } catch (_) {}
+    pace[s] = pr || { epw: plan.epw ?? 2, target: plan.target ?? null, target2: plan.target2 ?? null };
     const l = await sGet(kLulls(course, s));
     if (l == null || l === '') lulls[s] = (plan.lulls || []).map(x => ({ start: x.start, end: x.end }));
     else { try { lulls[s] = JSON.parse(l); } catch (_) { lulls[s] = []; } }
   }
 }
 async function saveLulls(s) { await sSet(kLulls(course, s), JSON.stringify(lulls[s] || [])); touched(); }
+async function savePace(s) { await sSet(kPace(course, s), JSON.stringify(pace[s] || {})); touched(); }
+/* Always a shape, even for a student added since load. */
+export function paceOf(s) { return (pace && pace[s]) || { epw: 2, target: null, target2: null }; }
+/* The box holds whatever the user is part-way through typing, so the maths needs
+   its own reading. Clearing it to type a new number used to snap it back to 2. */
+export function epwOf(s) { const n = parseFloat(paceOf(s).epw); return n > 0 ? n : 2; }
 async function saveMarks(s) { await sSet(kMarks(course, s), JSON.stringify(marks[s])); touched(); }
 async function saveDates(s) { await sSet(kDates(course, s), JSON.stringify(dates[s])); touched(); }
 
@@ -1737,9 +1754,11 @@ export async function setLastSyll(s, v) { dates[s].lastSyll = v; dates[s].lastCu
 export async function setLastCurr(s, v) { dates[s].lastCurr = v; await saveDates(s); renderSide(); }
 export async function setDownDays(s, v) { dates[s].downDays = v; await saveDates(s); renderSide(); }
 export async function setUpchit(s, v) { dates[s].upchit = v; await saveDates(s); renderSide(); }
-export async function setEpw(v) { plan.epw = parseFloat(v) || 2; plan.mode = 'pace'; await savePlan(); renderSide(); }
-export async function setTarget(v) { plan.target = v; await savePlan(); renderSide(); }
-export async function setTarget2(v) { plan.target2 = v; await savePlan(); renderSide(); }
+/* v is kept verbatim — an empty or half-typed box must stay as typed. epwOf()
+   does the coercion for the arithmetic. */
+export async function setEpw(s, v) { pace[s] = { ...paceOf(s), epw: v }; await savePace(s); renderSide(); }
+export async function setTarget(s, v) { pace[s] = { ...paceOf(s), target: v }; await savePace(s); renderSide(); }
+export async function setTarget2(s, v) { pace[s] = { ...paceOf(s), target2: v }; await savePace(s); renderSide(); }
 export async function removeLull(s, i) {
   (lulls[s] = lulls[s] || []).splice(i, 1); await saveLulls(s); renderSide();
 }
@@ -2452,7 +2471,7 @@ export async function collectStudents() {
     /* Lulls hang off the course, not a syllabus, so they ride beside plan
        rather than inside bySyllabus. Purely additive: an older file simply has
        no key here and migrates from plan.lulls when it is opened. */
-    const lullsOut = {};
+    const lullsOut = {}, paceOut = {};
     for (const n of orderedSylNames()) {
       const rRaw = await sGet(kRosterFor(c, n));
       let rr = []; try { rr = rRaw ? JSON.parse(rRaw) : []; } catch (_) { rr = []; }
@@ -2460,9 +2479,11 @@ export async function collectStudents() {
         if (lullsOut[st]) continue;
         const l = await sGet(kLulls(c, st));
         if (l) { try { lullsOut[st] = JSON.parse(l); } catch (_) {} }
+        const pc = await sGet(kPace(c, st));
+        if (pc) { try { paceOut[st] = JSON.parse(pc); } catch (_) {} }
       }
     }
-    byCourse[c] = { plan: planObj, lulls: lullsOut, bySyllabus };
+    byCourse[c] = { plan: planObj, lulls: lullsOut, pace: paceOut, bySyllabus };
   }
   return { courses: COURSES.slice(), byCourse };
 }
@@ -2507,6 +2528,7 @@ export async function applyStudents(students) {
     const cs = (students.byCourse || {})[c] || {};
     if (cs.plan) await sSet(kPlan(c), JSON.stringify(cs.plan));
     for (const st in (cs.lulls || {})) await sSet(kLulls(c, st), JSON.stringify(cs.lulls[st]));
+    for (const st in (cs.pace || {})) await sSet(kPace(c, st), JSON.stringify(cs.pace[st]));
     for (const n in (cs.bySyllabus || {})) {
       const b = cs.bySyllabus[n];
       await sSet(kRosterFor(c, n), JSON.stringify(b.roster || []));
