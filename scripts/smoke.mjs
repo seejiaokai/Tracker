@@ -778,10 +778,35 @@ const cardPair = await pg.evaluate(() => {
 ok('the Students card is the same size as the Overall card beside it',
   cardPair !== null && cardPair <= 14, `${cardPair}px apart`);
 
-ok('every statistic fits on one phone screen, no pinching to photograph it',
-  phoneStats.scrollH <= phoneStats.clientH,
-  `${phoneStats.scrollH}px of stats in ${phoneStats.clientH}px of screen — `
-  + phoneStats.cards.map(c => `${c.t.trim()} ${c.h}`).join(', '));
+/* The user's requirement, in their words: everything must be visible in one look
+   so it can be photographed — except Lull periods, which they are content to
+   scroll for, and which therefore sits alone on the last row. Measured to the
+   bottom of the last card ABOVE it, so adding a fifth student pushes only Lull
+   below the fold and this keeps meaning what it says. */
+const phoneFit = await pg.evaluate(() => {
+  const s = document.getElementById('side'), top = s.getBoundingClientRect().top;
+  const cards = [...s.querySelectorAll('.card')].map(c => ({
+    t: ((c.querySelector('h3') || {}).textContent || '').trim(),
+    bottom: Math.round(c.getBoundingClientRect().bottom - top),
+    h: Math.round(c.getBoundingClientRect().height),
+  }));
+  const others = cards.filter(c => !c.t.startsWith('Lull'));
+  return { screenH: s.clientHeight,
+    aboveLull: Math.max(...others.map(c => c.bottom)) + 6,
+    total: Math.max(...cards.map(c => c.bottom)) + 6,
+    cards: cards.map(c => `${c.t.slice(0, 20)} ${c.h}`) };
+});
+ok('every statistic but lull periods fits one phone screen, no pinching',
+  phoneFit.aboveLull <= phoneFit.screenH,
+  `${phoneFit.aboveLull}px in ${phoneFit.screenH}px — ` + phoneFit.cards.join(', '));
+/* Lull periods last, as asked — anything else stranded down there is a mistake. */
+ok('lull periods is the card that sits below the rest', await pg.evaluate(() => {
+  const s = document.getElementById('side');
+  const cards = [...s.querySelectorAll('.card')];
+  const lowest = cards.reduce((a, c) =>
+    c.getBoundingClientRect().bottom > a.getBoundingClientRect().bottom ? c : a);
+  return ((lowest.querySelector('h3') || {}).textContent || '').trim().startsWith('Lull');
+}));
 
 await pg.setViewportSize({ width: 1500, height: 950 });
 await pg.waitForTimeout(400);

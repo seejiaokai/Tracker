@@ -249,11 +249,11 @@ small.hint{color:var(--muted);font-size:11px}
     width, where their fields go two across instead of stacking four deep. A
     183px column is too narrow for a dd/mm/yyyy field to sit beside anything. */
  .card.wide{grid-column:1/-1}
- /* Five narrow cards means one always sits alone on a row, so the SHORTEST goes
-    last. Pairing the two tallest and leaving Plannable now on its own recovers
-    ~49px against leaving Lull periods stranded there. */
- .c-overall{order:1}.c-students{order:2}.c-next{order:3}.c-lull{order:4}
- .c-curr{order:5}.c-pace{order:6}.c-plan{order:7}
+ /* Five narrow cards means one always sits alone on the last row. Lull periods
+    goes there at the user's request — it is the one card they are happy to
+    scroll for — and Plannable now takes its place beside Next event. */
+ .c-overall{order:1}.c-students{order:2}.c-next{order:3}.c-plan{order:4}
+ .c-curr{order:5}.c-pace{order:6}.c-lull{order:7}
  .kvGrid,.curKv{grid-template-columns:minmax(0,1fr)}
  .kvGrid .kv,.curKv .kv{border-bottom:0}
  .flexPair{display:grid;gap:5px;margin-top:6px}
