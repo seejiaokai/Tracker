@@ -1551,15 +1551,16 @@ const V2_REMOVED = ['TR-6(P)', 'BFM-6', 'BFM-7', 'LASDT-3', 'TI-3',
     JSON.stringify(v2.map(e => e.id).sort()) === JSON.stringify(ids26.sort()),
     `v2=${v2.length} expected=${ids26.length}`);
   /* The user is refining v2 by hand in the app (8 Aug, work in progress —
-     merged from their saved file). These six links now deliberately differ
-     from Tx 2026; everything else must still agree. */
+     merged from their saved file). These links deliberately differ from
+     Tx 2026; everything else must still agree.
+     Their file also cut SA-1 down to [TI-2] — orphaning ST-17, JMP-04 and
+     OPS-07 — and dropped AHC-1's INT(S)-1, which every source keeps. They
+     reported both as errors the same day; both were reconnected. */
   const V2_USER_EDITS = {
     'TR-4': ['EPE', 'TR-3'],
     'TR-5(P)': ['AAS-04', 'IEPE/IPC', 'TR-4'],
-    'AHC-1': ['TR-5(P)'],
-    'TI-1': ['ACM-3', 'TI(S)-2', 'TI(S)-3'],
-    'SA(S)-1': ['AGW-01', 'ST-13', 'TI(S)-3'],
-    'SA-1': ['TI-2'],
+    'TI-1': ['ACM-3', 'TI(S)-2', 'TI(S)-3'],   /* both sims: it flies TI-1+TI-2 content */
+    'SA(S)-1': ['AGW-01', 'ST-13', 'TI(S)-3'], /* TI(S)-3 stands in for the cut DCA(S)-1 */
   };
   const linkDiff = v2.filter(e => {
     const want = V2_USER_EDITS[e.id] || (txById[e.id]?.prereqs || []);
@@ -1694,9 +1695,7 @@ ok('A/G - A/A prereqs match its own course map', wrongAG.length === 0,
    nothing, because the events that consumed them — TI-3 and DCA-1 — are cut from
    the short course. At the user's direction SA-1 now waits on TI-2, which is the
    real bridge behind the cut DCA-1, and TI-2 takes TI-1 as it does in 2026. */
-/* v2 is mid-edit: the user's SA-1 trim leaves ST-17, JMP-04 and OPS-07 feeding
-   nothing for now. Expected to drop back toward 1 as they finish. */
-const ENDPOINTS = { '2026': 1, 'A/G - A/A 2026': 1, 'Tx 2026': 1, 'Tx 2026 v2': 4, 'Tx 2024': 2, '2024': 6 };
+const ENDPOINTS = { '2026': 1, 'A/G - A/A 2026': 1, 'Tx 2026': 1, 'Tx 2026 v2': 1, 'Tx 2024': 2, '2024': 6 };
 const ends = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const used = new Set(syl.flatMap(e => e.prereqs || []));
