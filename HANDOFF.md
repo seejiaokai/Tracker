@@ -28,11 +28,11 @@ verified live. **Run `npm run live` and look at the screenshot before anything e
 
 | Reported | Cause |
 |---|---|
-| Phone menus dead | Panels were clipped by the sideways-scrolling header; now `position:fixed`, placed by JS |
-| Pace stuck at 2 | `parseFloat(v) \|\| 2` turned the empty box into 2; the raw text is stored now and coerced only for arithmetic |
-| Each student must be independent | Pace, both end dates and lull periods are per student (`v3:<course>:pace:<student>`, `:lulls:<student>`) |
-| **Syllabus could not be changed on a course that had marks** | "Open on the last-marked syllabus" ran on *every* `loadCourse`, including the one the user's own choice triggers, so it overwrote that choice instantly. Now opt-in: `init()` and `switchCourse` only |
-| End dates ran off the right on the phone | Panel now opens at what used to be 80%, and the three pace boxes sit on one row with centred, contained date fields |
+| Phone menus dead | Panels clipped by the scrolling header; now `position:fixed`, placed by JS |
+| Pace stuck at 2 | `parseFloat(v) \|\| 2` ate the empty box; raw text stored, coerced only for arithmetic |
+| Each student independent | Pace, end dates, lulls per student (`v3:<course>:pace:<student>`) |
+| **Syllabus stuck on marked course** | "Open on last-marked" ran on every `loadCourse`, overwriting the user's own choice. Now opt-in: `init()` / `switchCourse` |
+| End dates off-screen on phone | Panel opens at the old 80%; pace boxes on one row, dates contained |
 
 **Not reproduced: the "ACG-06 puck snapping" report.** Edit → Show All Details moved zero
 balls, wrote no layout keys and raised no save button. Best theory: the syllabus was
@@ -150,6 +150,13 @@ marking, so the app looked like it had nothing to save when it did.
   supersede the map pins). Tx 2026 mirrors those edits (`TX_MIRROR`), except `SA-5`, which
   keeps the doc-stated `[SA-4, SA(S)-6, SA(S)-7]`. One edit they recalled the same day:
   `ST-10` feeds `LASDT(S)-1` again, as the map draws it.
+- **`Tx 2026 v2` is the short course the user actually wants to look at** — their 2026
+  chart replicated (positions, drawn lines, wires) minus the ten events Tx cuts, links
+  bridged as in `Tx 2026`. A NEW name deliberately: **the user's stored charts shadow baked
+  ones of the same name** (the ✎ in their picker), so re-baking `Tx 2026` was invisible to
+  them. Their old `Tx 2026` still exists; retiring it is their call. Six long and three
+  upward arrows are recorded in the span/backwards baselines — Tx-only links crossing a
+  layout drawn for 2026. `V2_REMOVED` in `smoke.mjs` lists the ten cut events.
 - **Detail bubbles are per-syllabus now.** `EVENT_INFO_BY_SYL['Tx 2026']` carries the
   renumbered profiles (Tx `BFM-5` = BCTM `BFM-7`, `SA-5` = `SA-6` crew-solo, `TI-2` =
   8-ship `TI-3`, `LASDT-2` = `LASDT-3`, `TR-5(P)` = IRT `UP / IRE`), merged in `infoFor`

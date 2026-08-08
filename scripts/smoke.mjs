@@ -1150,7 +1150,7 @@ ok('no uncaught page errors', errs.length === 0, errs.slice(0, 2).join(' | '));
 ok('no unexpected failed requests', bad4xx.length === 0, [...new Set(bad4xx)].slice(0, 3).join(' | '));
 
 /* ---- syllabus data integrity (every syllabus) + 2026 chart spot-checks ---- */
-const { SYLLABI } = await import('../src/data/syllabi.js');
+const { SYLLABI, DEFAULT_SYL_ORDER } = await import('../src/data/syllabi.js');
 const dangling = [], cyclic = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const byid = Object.fromEntries(syl.map(e => [e.id, e]));
@@ -1455,6 +1455,44 @@ ok('Tx overrides never invent an event the syllabus lacks', (() => {
   return Object.keys(txOv).every(id => ids.has(id));
 })(), Object.keys(txOv).filter(id => !SYLLABI['Tx 2026'].some(e => e.id === id)).join(', '));
 
+/* ---- Tx 2026 v2: the 2026 chart replicated for the short course ----
+   Built at the user's request, 8 Aug: their 2026 — positions, drawn lines and
+   all — minus the ten events the short course does not fly, links bridged the
+   same way Tx 2026 has them. A NEW name on purpose: the user's stored charts
+   shadow baked ones of the same name, so a fresh name is visible immediately. */
+const V2_REMOVED = ['TR-6(P)', 'BFM-6', 'BFM-7', 'LASDT-3', 'TI-3',
+  'DCA(S)-1', 'DCA-1', 'SA-6', 'SAT(S)-2', 'SAT-2'];
+{
+  const v2 = SYLLABI['Tx 2026 v2'] || []; /* [] keeps the block failing loudly, not crashing */
+  ok('Tx 2026 v2 exists and is ordered like 2026', v2.length === 200
+    && v2.every((e, i) => e.seq === i), `${v2.length} events`);
+  const ids26 = SYLLABI['2026'].map(e => e.id).filter(id => !V2_REMOVED.includes(id));
+  ok('v2 is the 2026 event list minus the ten the short course cuts',
+    JSON.stringify(v2.map(e => e.id).sort()) === JSON.stringify(ids26.sort()),
+    `v2=${v2.length} expected=${ids26.length}`);
+  const linkDiff = v2.filter(e =>
+    JSON.stringify([...e.prereqs].sort()) !== JSON.stringify([...(txById[e.id]?.prereqs || [])].sort()));
+  ok('v2 links agree with Tx 2026 event-for-event', linkDiff.length === 0,
+    linkDiff.slice(0, 4).map(e => `${e.id}=[${e.prereqs.join(',')}]`).join(' | '));
+  const lay26 = LAYOUTS_FOR_LINES['2026'], layV2 = LAYOUTS_FOR_LINES['Tx 2026 v2'] || {};
+  const offGrid = v2.filter(e => !layV2[e.id]
+    || layV2[e.id].x !== lay26[e.id]?.x || layV2[e.id].y !== lay26[e.id]?.y);
+  ok('every v2 event sits exactly where the 2026 chart puts it', offGrid.length === 0,
+    offGrid.slice(0, 5).map(e => e.id).join(', '));
+  ok('v2 leaves no position behind for a removed event',
+    V2_REMOVED.every(id => !layV2[id]), V2_REMOVED.filter(id => layV2[id]).join(', '));
+  ok('v2 carries the 2026 drawn lines', (layV2.__lines || []).length >= 50,
+    `${(layV2.__lines || []).length} lines`);
+  ok('no v2 drawn line anchors to a removed event', (layV2.__lines || []).every(l =>
+    [l.a, l.b].every(a => !a || a.t !== 'ball' || v2.some(e => e.id === a.id))));
+  ok('v2 uses the same short-course sortie profiles as Tx 2026',
+    EVENT_INFO_BY_SYL['Tx 2026 v2'] && JSON.stringify(EVENT_INFO_BY_SYL['Tx 2026 v2'])
+      === JSON.stringify(EVENT_INFO_BY_SYL['Tx 2026']));
+  ok('v2 sits beside Tx 2026 in the default order',
+    DEFAULT_SYL_ORDER.indexOf('Tx 2026 v2') === DEFAULT_SYL_ORDER.indexOf('Tx 2026') + 1,
+    DEFAULT_SYL_ORDER.join(' · '));
+}
+
 /* NTR-1 waits on SA-4 in the 2026 map AND in the short course's own table. */
 ok('Tx NTR-1 waits for SA-4', JSON.stringify((txById['NTR-1']?.prereqs || []).slice().sort())
   === JSON.stringify(['NTR(S)-1', 'SA-4']), `[${(txById['NTR-1']?.prereqs || []).join(',')}]`);
@@ -1562,7 +1600,7 @@ ok('A/G - A/A prereqs match its own course map', wrongAG.length === 0,
    nothing, because the events that consumed them — TI-3 and DCA-1 — are cut from
    the short course. At the user's direction SA-1 now waits on TI-2, which is the
    real bridge behind the cut DCA-1, and TI-2 takes TI-1 as it does in 2026. */
-const ENDPOINTS = { '2026': 1, 'A/G - A/A 2026': 1, 'Tx 2026': 1, 'Tx 2024': 2, '2024': 6 };
+const ENDPOINTS = { '2026': 1, 'A/G - A/A 2026': 1, 'Tx 2026': 1, 'Tx 2026 v2': 1, 'Tx 2024': 2, '2024': 6 };
 const ends = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const used = new Set(syl.flatMap(e => e.prereqs || []));
@@ -1594,7 +1632,11 @@ const SPAN_LIMIT = 1000;
    are the refresher chain, which did exactly the same to 2026 (2 -> 5) — the
    DAAR spine runs the height of the chart by design, as the map draws it. Links
    right, routing ugly; recorded rather than hidden. */
-const SPAN_BASELINE = { '2024': 0, '2026': 5, 'Tx 2026': 7, 'A/G - A/A 2026': 10, 'Tx 2024': 3 };
+/* Tx 2026 v2 replicates the 2026 GEOMETRY under the short course's WIRING, so
+   the handful of links Tx has and 2026 does not (LASDT(S)-1->SA(S)-1, the
+   AGR-01 correction, the DAAR spine) cross space no wire was drawn for. Links
+   right, routing ugly; recorded, and the user can redraw lines in the app. */
+const SPAN_BASELINE = { '2024': 0, '2026': 5, 'Tx 2026': 7, 'Tx 2026 v2': 6, 'A/G - A/A 2026': 10, 'Tx 2024': 3 };
 const stretched = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const L = DEFAULT_LAYOUTS[name]; if (!L) continue;
@@ -1614,7 +1656,9 @@ ok(`no new arrows longer than ${SPAN_LIMIT}px`, stretched.length === 0, stretche
    it feeds draws an arrow pointing back up the page. Cleared in the two charts
    read against their own map; the rest are recorded, not endorsed — in Tx and
    2024 it is still open whether the box or the link is the wrong one. */
-const BACKWARDS_BASELINE = { '2024': 2, '2026': 0, 'Tx 2026': 4, 'A/G - A/A 2026': 0, 'Tx 2024': 4 };
+/* v2's three upward arrows are Tx-only links pointed at boxes 2026 places
+   higher: AAS-04->TR-4, TI(S)-3->TI-1, AAM-14->TI-2. Same story as above. */
+const BACKWARDS_BASELINE = { '2024': 2, '2026': 0, 'Tx 2026': 4, 'Tx 2026 v2': 3, 'A/G - A/A 2026': 0, 'Tx 2024': 4 };
 const backwards = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const L = DEFAULT_LAYOUTS[name]; if (!L) continue;
