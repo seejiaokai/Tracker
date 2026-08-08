@@ -1551,15 +1551,16 @@ const V2_REMOVED = ['TR-6(P)', 'BFM-6', 'BFM-7', 'LASDT-3', 'TI-3',
     JSON.stringify(v2.map(e => e.id).sort()) === JSON.stringify(ids26.sort()),
     `v2=${v2.length} expected=${ids26.length}`);
   /* The user is refining v2 by hand in the app (8 Aug, work in progress —
-     merged from their saved file). These six links now deliberately differ
-     from Tx 2026; everything else must still agree. */
+     merged from their saved file). These links deliberately differ from
+     Tx 2026; everything else must still agree.
+     Their file also cut SA-1 down to [TI-2] — orphaning ST-17, JMP-04 and
+     OPS-07 — and dropped AHC-1's INT(S)-1, which every source keeps. They
+     reported both as errors the same day; both were reconnected. */
   const V2_USER_EDITS = {
     'TR-4': ['EPE', 'TR-3'],
     'TR-5(P)': ['AAS-04', 'IEPE/IPC', 'TR-4'],
-    'AHC-1': ['TR-5(P)'],
-    'TI-1': ['ACM-3', 'TI(S)-2', 'TI(S)-3'],
-    'SA(S)-1': ['AGW-01', 'ST-13', 'TI(S)-3'],
-    'SA-1': ['TI-2'],
+    'TI-1': ['ACM-3', 'TI(S)-2', 'TI(S)-3'],   /* both sims: it flies TI-1+TI-2 content */
+    'SA(S)-1': ['AGW-01', 'ST-13', 'TI(S)-3'], /* TI(S)-3 stands in for the cut DCA(S)-1 */
   };
   const linkDiff = v2.filter(e => {
     const want = V2_USER_EDITS[e.id] || (txById[e.id]?.prereqs || []);
