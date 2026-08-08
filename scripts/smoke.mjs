@@ -1121,6 +1121,57 @@ ok('the app still opens with a remembered student who is gone',
 await pg.evaluate(() => localStorage.clear());
 await pg.reload({ waitUntil: 'networkidle' });
 await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+
+/* ---- the zoom buttons keep the view anchored ----
+   setFlowZoom used to change the scale with no scroll correction, so the
+   viewport landed on a different part of the chart — "zooming snaps to another
+   area". The chart is 10,000px tall, so the vertical anchor is the one that
+   matters; the horizontal one only exists once the width overflows. */
+const zread = () => pg.evaluate(() => {
+  const b = document.getElementById('board');
+  const z = +(getComputedStyle(document.querySelector('#board .flowwrap')).zoom || 1);
+  return { cx: (b.scrollLeft + b.clientWidth / 2) / z, cy: (b.scrollTop + b.clientHeight / 2) / z, z };
+});
+await pg.evaluate(() => { const b = document.getElementById('board'); b.scrollTop = 3000; });
+const z0 = await zread();
+await pg.click('#fzIn'); await pg.waitForTimeout(150);
+await pg.click('#fzIn'); await pg.waitForTimeout(150);
+const z1 = await zread();
+ok('zooming in holds the event under the middle of the view',
+  Math.abs(z1.cy - z0.cy) < 8, `cy ${Math.round(z0.cy)} -> ${Math.round(z1.cy)} at z=${z1.z}`);
+/* push well past the width-fits point, or edge clamping muddies the measure */
+for (let i = 0; i < 6; i++) { await pg.click('#fzIn'); await pg.waitForTimeout(100); }
+await pg.evaluate(() => { const b = document.getElementById('board'); b.scrollLeft = 150; });
+const z2 = await zread();
+await pg.click('#fzIn'); await pg.waitForTimeout(150);
+const z3 = await zread();
+ok('zooming holds the horizontal position once the width overflows',
+  Math.abs(z3.cx - z2.cx) < 8 && Math.abs(z3.cy - z2.cy) < 8,
+  `cx ${Math.round(z2.cx)} -> ${Math.round(z3.cx)}, cy ${Math.round(z2.cy)} -> ${Math.round(z3.cy)}`);
+await pg.click('#fzReset'); await pg.waitForTimeout(150);
+await pg.evaluate(() => { const b = document.getElementById('board'); b.scrollTop = 0; b.scrollLeft = 0; });
+
+/* ---- the edit-mode hint floats; it must not push the chart ----
+   The hint's height changes with every tool switch and flash message. In flow,
+   that shoved the board up and down mid-line-draw, so ends landed on the wrong
+   spot. It overlays now: switching tools may not move the board at all. */
+await pg.click('#arrangeBtn'); await pg.waitForTimeout(400);
+const svgTop0 = await pg.evaluate(() => document.getElementById('flowSvg').getBoundingClientRect().top);
+await pg.click('#arrTools button:has-text("╱ Line")'); await pg.waitForTimeout(250);
+const lineState = await pg.evaluate(() => ({
+  top: document.getElementById('flowSvg').getBoundingClientRect().top,
+  hintShown: getComputedStyle(document.getElementById('arrhint')).display === 'block',
+  hintHeight: document.getElementById('arrhint').getBoundingClientRect().height,
+  wrapHeight: document.querySelector('.arrhintwrap').getBoundingClientRect().height,
+  passesClicks: getComputedStyle(document.getElementById('arrhint')).pointerEvents === 'none',
+}));
+ok('switching to the Line tool does not move the board',
+  lineState.top === svgTop0, `top ${svgTop0} -> ${lineState.top}`);
+ok('the hint is visible, floats in zero flow space, and passes clicks through',
+  lineState.hintShown && lineState.hintHeight > 10 && lineState.wrapHeight === 0 && lineState.passesClicks,
+  JSON.stringify(lineState));
+await pg.click('#arrTools button:has-text("✋ Move")'); await pg.waitForTimeout(200);
+await pg.click('#arrangeBtn'); await pg.waitForTimeout(400);
 const sylOptions = await pg.evaluate(() =>
   [...document.getElementById('sylSel').options].map(o => o.value));
 const txOpt = sylOptions.find(v => v === 'Tx 2026') || sylOptions.find(v => v.startsWith('Tx 2026'));
@@ -1499,15 +1550,29 @@ const V2_REMOVED = ['TR-6(P)', 'BFM-6', 'BFM-7', 'LASDT-3', 'TI-3',
   ok('v2 is the 2026 event list minus the ten the short course cuts',
     JSON.stringify(v2.map(e => e.id).sort()) === JSON.stringify(ids26.sort()),
     `v2=${v2.length} expected=${ids26.length}`);
-  const linkDiff = v2.filter(e =>
-    JSON.stringify([...e.prereqs].sort()) !== JSON.stringify([...(txById[e.id]?.prereqs || [])].sort()));
-  ok('v2 links agree with Tx 2026 event-for-event', linkDiff.length === 0,
+  /* The user is refining v2 by hand in the app (8 Aug, work in progress —
+     merged from their saved file). These six links now deliberately differ
+     from Tx 2026; everything else must still agree. */
+  const V2_USER_EDITS = {
+    'TR-4': ['EPE', 'TR-3'],
+    'TR-5(P)': ['AAS-04', 'IEPE/IPC', 'TR-4'],
+    'AHC-1': ['TR-5(P)'],
+    'TI-1': ['ACM-3', 'TI(S)-2', 'TI(S)-3'],
+    'SA(S)-1': ['AGW-01', 'ST-13', 'TI(S)-3'],
+    'SA-1': ['TI-2'],
+  };
+  const linkDiff = v2.filter(e => {
+    const want = V2_USER_EDITS[e.id] || (txById[e.id]?.prereqs || []);
+    return JSON.stringify([...e.prereqs].sort()) !== JSON.stringify([...want].sort());
+  });
+  ok('v2 links agree with Tx 2026 apart from the user\'s own edits', linkDiff.length === 0,
     linkDiff.slice(0, 4).map(e => `${e.id}=[${e.prereqs.join(',')}]`).join(' | '));
-  const lay26 = LAYOUTS_FOR_LINES['2026'], layV2 = LAYOUTS_FOR_LINES['Tx 2026 v2'] || {};
-  const offGrid = v2.filter(e => !layV2[e.id]
-    || layV2[e.id].x !== lay26[e.id]?.x || layV2[e.id].y !== lay26[e.id]?.y);
-  ok('every v2 event sits exactly where the 2026 chart puts it', offGrid.length === 0,
-    offGrid.slice(0, 5).map(e => e.id).join(', '));
+  const layV2 = LAYOUTS_FOR_LINES['Tx 2026 v2'] || {};
+  /* The layout started as an exact copy of 2026's and is now the user's to
+     shape, so only coverage is pinned: every event has a place. */
+  const unplaced = v2.filter(e => typeof layV2[e.id]?.x !== 'number');
+  ok('every v2 event has a place on the chart', unplaced.length === 0,
+    unplaced.slice(0, 5).map(e => e.id).join(', '));
   ok('v2 leaves no position behind for a removed event',
     V2_REMOVED.every(id => !layV2[id]), V2_REMOVED.filter(id => layV2[id]).join(', '));
   ok('v2 carries the 2026 drawn lines', (layV2.__lines || []).length >= 50,
@@ -1629,7 +1694,9 @@ ok('A/G - A/A prereqs match its own course map', wrongAG.length === 0,
    nothing, because the events that consumed them — TI-3 and DCA-1 — are cut from
    the short course. At the user's direction SA-1 now waits on TI-2, which is the
    real bridge behind the cut DCA-1, and TI-2 takes TI-1 as it does in 2026. */
-const ENDPOINTS = { '2026': 1, 'A/G - A/A 2026': 1, 'Tx 2026': 1, 'Tx 2026 v2': 1, 'Tx 2024': 2, '2024': 6 };
+/* v2 is mid-edit: the user's SA-1 trim leaves ST-17, JMP-04 and OPS-07 feeding
+   nothing for now. Expected to drop back toward 1 as they finish. */
+const ENDPOINTS = { '2026': 1, 'A/G - A/A 2026': 1, 'Tx 2026': 1, 'Tx 2026 v2': 4, 'Tx 2024': 2, '2024': 6 };
 const ends = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const used = new Set(syl.flatMap(e => e.prereqs || []));
@@ -1665,7 +1732,7 @@ const SPAN_LIMIT = 1000;
    the handful of links Tx has and 2026 does not (LASDT(S)-1->SA(S)-1, the
    AGR-01 correction, the DAAR spine) cross space no wire was drawn for. Links
    right, routing ugly; recorded, and the user can redraw lines in the app. */
-const SPAN_BASELINE = { '2024': 0, '2026': 5, 'Tx 2026': 7, 'Tx 2026 v2': 6, 'A/G - A/A 2026': 10, 'Tx 2024': 3 };
+const SPAN_BASELINE = { '2024': 0, '2026': 5, 'Tx 2026': 7, 'Tx 2026 v2': 7, 'A/G - A/A 2026': 10, 'Tx 2024': 3 };
 const stretched = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const L = DEFAULT_LAYOUTS[name]; if (!L) continue;

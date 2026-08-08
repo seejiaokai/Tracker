@@ -1269,7 +1269,22 @@ function fitPhoneWidth(chartW) {
 function applyFlowZoom() {
   const w = document.querySelector('#board .flowwrap'); if (w) w.style.zoom = arrangeMode ? 1 : flowZoom;
 }
-export function setFlowZoom(z) { zoomIsMine = true; flowZoom = z; applyFlowZoom(); notify(); }
+/* Anchored at the middle of the current view, the same way pinch zoom anchors
+   under the fingers. Without the scroll correction, CSS zoom rescales the whole
+   page under an unchanged scroll position and the viewport lands on a different
+   part of the chart. */
+export function setFlowZoom(z) {
+  zoomIsMine = true;
+  const board = document.getElementById('board');
+  if (board && !arrangeMode && flowZoom > 0) {
+    const ox = board.clientWidth / 2, oy = board.clientHeight / 2;
+    const cx = (board.scrollLeft + ox) / flowZoom, cy = (board.scrollTop + oy) / flowZoom;
+    flowZoom = z; applyFlowZoom();
+    void board.scrollWidth; /* force reflow, or the new scroll range is stale and clamps */
+    board.scrollLeft = cx * z - ox; board.scrollTop = cy * z - oy;
+  } else { flowZoom = z; applyFlowZoom(); }
+  notify();
+}
 function wireBoard() {
   const svg = document.getElementById('flowSvg');
   document.querySelectorAll('#flowSvg .ball').forEach(g => {

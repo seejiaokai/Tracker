@@ -130,7 +130,11 @@ svg.perf .edgehit{pointer-events:none}
 .numbadge{font:700 9px Arial;fill:#fff}.numbg{fill:#11141a;stroke:#5a6172;stroke-width:0.8}
 /* Docked for the same reason as .arrtools — it floated at top:96px, over the
    header at any width where the header wraps past that. */
-.arrhint{background:#16384a;border-bottom:1px solid var(--accent);color:#dff;padding:4px 12px;font-size:12px;display:none;text-align:center}
+/* The wrapper is 0px tall so the hint never pushes the chart; the hint itself
+   overlays the legend strip below. pointer-events:none lets every click pass
+   through, so it can never block the board. Keep it under the header menus (50). */
+.arrhintwrap{position:relative;height:0;z-index:45}
+.arrhint{position:absolute;top:0;left:0;right:0;background:#16384a;border-bottom:1px solid var(--accent);color:#dff;padding:4px 12px;font-size:12px;display:none;text-align:center;pointer-events:none;opacity:.97}
 .arrhint.on{display:block}
 /* Fixed-width slot so the bar is the same size dirty or clean. */
 .saveslot{display:inline-flex;align-items:center;gap:6px;justify-content:flex-end;min-width:172px}
