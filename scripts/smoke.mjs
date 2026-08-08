@@ -1112,6 +1112,40 @@ ok('the app still opens with a remembered student who is gone',
   await pg.locator('#flowSvg .ball').count() > 0 && errs.length === 0,
   `${await pg.locator('#flowSvg .ball').count()} events, ${errs.length} page errors`);
 
+/* ---- the short course shows its OWN sortie profiles ----
+   Tx renumbers: its BFM-5 flies the long course's BFM-7 profile, its SA-5 the
+   SA-6 one. Details are looked up per active syllabus (EVENT_INFO_BY_SYL), so
+   the same ball must show different words after a syllabus switch. */
+/* run from a clean slate — earlier checks leave custom courses and remembered
+   positions behind, and this check is about the BAKED data, not that residue */
+await pg.evaluate(() => localStorage.clear());
+await pg.reload({ waitUntil: 'networkidle' });
+await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+const sylOptions = await pg.evaluate(() =>
+  [...document.getElementById('sylSel').options].map(o => o.value));
+const txOpt = sylOptions.find(v => v === 'Tx 2026') || sylOptions.find(v => v.startsWith('Tx 2026'));
+ok('the syllabus picker offers Tx 2026', !!txOpt, sylOptions.join(' | '));
+await pg.selectOption('#sylSel', txOpt);
+await pg.waitForTimeout(800);
+await clickBall('BFM-5'); await pg.waitForTimeout(300);
+await pg.click('#popEditInfo'); await pg.waitForSelector('#infoModal');
+const txInfo = await pg.evaluate(() => ({
+  name: document.getElementById('ifName').value,
+  crew: document.getElementById('ifCrew').value,
+}));
+ok('Tx BFM-5 shows the BCTM BFM-7 profile, not the long course\'s',
+  txInfo.name.includes('Refer to BCTM BFM-7') && txInfo.crew === 'IP / W, UP / IW or IP',
+  JSON.stringify(txInfo));
+await pg.click('#ifCancel'); await pg.waitForTimeout(200);
+await pg.selectOption('#sylSel', sylOptions.find(v => v === '2026') || '2026');
+await pg.waitForTimeout(800);
+await clickBall('BFM-5'); await pg.waitForTimeout(300);
+await pg.click('#popEditInfo'); await pg.waitForSelector('#infoModal');
+const longInfo = await pg.evaluate(() => document.getElementById('ifName').value);
+ok('switching back to 2026 restores the long course\'s BFM-5',
+  longInfo === 'Basic Fighting Manoeuvres-5', longInfo);
+await pg.click('#ifCancel'); await pg.waitForTimeout(200);
+
 ok('no uncaught page errors', errs.length === 0, errs.slice(0, 2).join(' | '));
 ok('no unexpected failed requests', bad4xx.length === 0, [...new Set(bad4xx)].slice(0, 3).join(' | '));
 
@@ -1167,6 +1201,27 @@ for (const [name, lay] of Object.entries(LAYOUTS_FOR_LINES)) {
 }
 ok('no drawn link claims a prerequisite the syllabus does not have', phantom.length === 0, phantom.join(', '));
 
+/* The user's own hand edits to 2026, made in the app and merged from their
+   saved file on 8 Aug 2026. These deliberately depart from the document and
+   SUPERSEDE the map/table pins below wherever they name the same event.
+   (Their file also cut ST-10 out of LASDT(S)-1; they called that a mistake
+   the same day, so that one link went back in and is NOT listed here.) */
+const USER_EDITS_2026 = {
+  'AVI-03': ['AVI-01'], 'AVI-04': ['AVI-01'],
+  'ACM-3': ['ACM-2'],
+  'SA-2': ['SA-1'], 'SA-3': ['SA-2'],
+  'DAAR-1': ['INT(S)-2', 'TR-4'],
+  'NAAR-1': ['DAAR-2', 'NTR-2'],
+  'ST-18': ['NAAR-2', 'SAT-2', 'SATN-1'],
+};
+{
+  const byu = Object.fromEntries(SYLLABI['2026'].map(e => [e.id, e]));
+  const bad = Object.entries(USER_EDITS_2026).filter(([id, want]) =>
+    JSON.stringify((byu[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+  ok('the user\'s 2026 hand edits hold', bad.length === 0,
+    bad.map(([id]) => `${id}=[${(byu[id]?.prereqs || []).join(',')}]`).join(' | '));
+}
+
 /* 2026 links cross-checked against the Prerequisites row of the Jul 26 tables.
    Two extraction passes have now misread these off the flow-chart images, so
    they are pinned to the value the document states in words. */
@@ -1183,8 +1238,10 @@ const CHART_2026 = {
   'ST-18': ['SAT-2', 'SATN-1', 'DAAR-2', 'NAAR-2'],
 };
 const by26 = Object.fromEntries(SYLLABI['2026'].map(e => [e.id, e]));
-const wrong = Object.entries(CHART_2026).filter(([id, want]) =>
-  JSON.stringify((by26[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+const wrong = Object.entries(CHART_2026).filter(([id, want0]) => {
+  const want = USER_EDITS_2026[id] || want0;
+  return JSON.stringify((by26[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort());
+});
 ok('2026 prereqs match the course map', wrong.length === 0,
   wrong.map(([id]) => `${id}=[${(by26[id]?.prereqs || []).join(',')}]`).join(' | '));
 
@@ -1196,9 +1253,10 @@ ok('2026 prereqs match the course map', wrong.length === 0,
 const MAP26 = JSON.parse(readFileSync(import.meta.dirname + '/course-map-2026.json', 'utf8'));
 const by26full = Object.fromEntries(SYLLABI['2026'].map(e => [e.id, e]));
 const mapWrong = [], mapMissing = [];
-for (const [id, want] of Object.entries(MAP26.edges)) {
+for (const [id, want0] of Object.entries(MAP26.edges)) {
   const ev = by26full[id];
   if (!ev) { mapMissing.push(id); continue; }
+  const want = USER_EDITS_2026[id] || want0; /* the user's edits supersede the map */
   const have = (ev.prereqs || []).slice().sort();
   if (JSON.stringify(have) !== JSON.stringify([...want].sort()))
     mapWrong.push(`${id}: map=[${want.join(',')}] app=[${have.join(',')}]`);
@@ -1278,11 +1336,13 @@ ok('Tx shares 2026\'s simulator ordering', txSimWrong.length === 0,
    user's request in the same four-event form as 2026, not the single DAAR/NAAR
    box the map draws. */
 const TX_REFRESHER = {
-  'DAAR-1': ['AAS-04', 'INT(S)-2', 'TR-4'],
+  /* mirrors the user's 8 Aug 2026 hand edits, with SAT-1 standing in for the
+     SAT-2 the short course does not fly */
+  'DAAR-1': ['INT(S)-2', 'TR-4'],
   'DAAR-2': ['DAAR-1'],
-  'NAAR-1': ['NTR-2'],
+  'NAAR-1': ['DAAR-2', 'NTR-2'],
   'NAAR-2': ['NAAR-1'],
-  'ST-18': ['SAT-1', 'SATN-1', 'DAAR-2', 'NAAR-2'],
+  'ST-18': ['SAT-1', 'SATN-1', 'NAAR-2'],
 };
 const txRefWrong = Object.entries(TX_REFRESHER).filter(([id, want]) =>
   JSON.stringify((txById[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
@@ -1341,15 +1401,59 @@ ok('2024 still carries them, being the older course',
    serial number, the way it marks the eleven events the short course drops, but the
    Tx flying module still requires it for SA-2 and SA-3. The user chose to keep it,
    8 Aug, having confirmed the SA(S)-2..-5 chain twice before. Pinned so the
-   unnumbered row does not get "corrected" into a deletion later.
-
-   Only SA-2 is asserted. The Tx table also gives SA-3 [SA-2, SA(S)-3], but the app
-   follows the 2026 map's stricter SA-3 [SA-2, SA(S)-4] — and SA(S)-4 sits behind
-   SA(S)-3 anyway, so the ordering it enforces is the same. */
-ok('Tx keeps SA(S)-3, and SA-2 still waits for it', (() => {
+   unnumbered row does not get "corrected" into a deletion later. Re-confirmed by
+   the user on 8 Aug during the Tx rebuild. Since their own 2026 edit removed the
+   SA(S)-3 link to the flights, it now lives inside the sim chain only: SA(S)-4
+   waits for it, no flight does. */
+ok('Tx keeps SA(S)-3 inside the sim chain', (() => {
   const has = SYLLABI['Tx 2026'].some(e => e.id === 'SA(S)-3');
-  return has && (txById['SA-2']?.prereqs || []).includes('SA(S)-3');
-})(), `present=${SYLLABI['Tx 2026'].some(e => e.id === 'SA(S)-3')} SA-2=[${(txById['SA-2']?.prereqs || []).join(',')}]`);
+  return has && (txById['SA(S)-4']?.prereqs || []).includes('SA(S)-3');
+})(), `present=${SYLLABI['Tx 2026'].some(e => e.id === 'SA(S)-3')} SA(S)-4=[${(txById['SA(S)-4']?.prereqs || []).join(',')}]`);
+
+/* The user's 2026 hand edits, mirrored onto the short course (the DAAR /
+   NAAR / ST-18 part is pinned by TX_REFRESHER above; academics by the
+   match-2026 check). SA-5 deliberately does NOT mirror: the Tx module states
+   [SA-4, SA(S)-6, SA(S)-7] in words, so the document's own value stands. */
+const TX_MIRROR = {
+  'ACM-3': ['ACM-2'],
+  'LASDT(S)-1': ['AAM-09', 'INT(S)-4', 'OPS-05', 'ST-10'],
+  'SA-2': ['SA-1'], 'SA-3': ['SA-2'],
+  'SA-5': ['SA(S)-6', 'SA(S)-7', 'SA-4'],
+};
+const txMirrorWrong = Object.entries(TX_MIRROR).filter(([id, want]) =>
+  JSON.stringify((txById[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+ok('Tx mirrors the user\'s 2026 hand edits', txMirrorWrong.length === 0,
+  txMirrorWrong.map(([id]) => `${id}=[${(txById[id]?.prereqs || []).join(',')}]`).join(' | '));
+
+/* ---- event details stay honest ----
+   A frozen prerequisite TEXT goes stale the moment a chart link changes (SAT-1
+   spent months showing DAAR's text). Bare id-list texts are therefore blanked so
+   the bubble falls back to the live chart links of the ACTIVE syllabus; only
+   prose notes that say more than the links may keep a text. */
+const { EVENT_INFO, EVENT_INFO_BY_SYL } = await import('../src/data/eventInfo.js');
+const PROSE_OK = new Set(['ACM-4', 'BFM-2', 'BFM-4', 'BFM-8', 'TR-5(P)', 'TR-6(P)', 'NAAR', 'DAAR-1', 'NAAR-1']);
+const staleTexts = Object.entries(EVENT_INFO)
+  .filter(([id, v]) => (v.pre || '') && !PROSE_OK.has(id) && !/[a-z]{4,}/.test(v.pre));
+ok('no frozen bare-id prerequisite texts remain', staleTexts.length === 0,
+  staleTexts.slice(0, 5).map(([id]) => id).join(', '));
+ok('every kept prerequisite text is a prose note, not a bare list',
+  [...PROSE_OK].every(id => !EVENT_INFO[id] || !(EVENT_INFO[id].pre || '') || /[a-z]{4,}/.test(EVENT_INFO[id].pre)));
+
+/* The short course's own sortie profiles, verbatim from the SHORT CONVERSION
+   module: same event id, different aircraft count / crew / name than 2026. */
+const txOv = EVENT_INFO_BY_SYL['Tx 2026'] || {};
+ok('Tx overrides carry the renumbered profiles', (() => {
+  return (txOv['BFM-5']?.name || '').includes('Refer to BCTM BFM-7')
+    && txOv['BFM-5']?.crew === 'IP / W, UP / IW or IP'
+    && (txOv['SA-5']?.crew || '').includes('Crew Solo')
+    && (txOv['TI-2']?.fmt || '').startsWith('8 x F-15SG')
+    && (txOv['LASDT-2']?.fmt || '').startsWith('4 x F-15SG')
+    && txOv['TR-5(P)']?.crew === 'UP / IRE';
+})(), JSON.stringify(txOv['BFM-5'] || null));
+ok('Tx overrides never invent an event the syllabus lacks', (() => {
+  const ids = new Set(SYLLABI['Tx 2026'].map(e => e.id));
+  return Object.keys(txOv).every(id => ids.has(id));
+})(), Object.keys(txOv).filter(id => !SYLLABI['Tx 2026'].some(e => e.id === id)).join(', '));
 
 /* NTR-1 waits on SA-4 in the 2026 map AND in the short course's own table. */
 ok('Tx NTR-1 waits for SA-4', JSON.stringify((txById['NTR-1']?.prereqs || []).slice().sort())
@@ -1374,11 +1478,13 @@ const wrongAG = Object.entries(CHART_AGAA).filter(([id, want]) =>
    for it split into four solid-line events instead, so this is deliberately NOT what the map
    draws. Structure mirrors 2024 (DAAR-1 -> DAAR-2, NAAR -> NAAR 2) and the A/G - A/A spine. */
 const REFRESHER_2026 = {
-  'DAAR-1': ['AAS-04', 'INT(S)-2', 'TR-4'],
+  /* DAAR-1, NAAR-1 and ST-18 now carry the user's 8 Aug hand edits: AAS-04
+     dropped from DAAR-1, NAAR-1 waits for DAAR-2, ST-18 no longer for DAAR-2. */
+  'DAAR-1': ['INT(S)-2', 'TR-4'],
   'DAAR-2': ['DAAR-1'],
-  'NAAR-1': ['NTR-2'],
+  'NAAR-1': ['DAAR-2', 'NTR-2'],
   'NAAR-2': ['NAAR-1'],
-  'ST-18': ['SAT-2', 'SATN-1', 'DAAR-2', 'NAAR-2'],
+  'ST-18': ['SAT-2', 'SATN-1', 'NAAR-2'],
 };
 const by26r = Object.fromEntries(SYLLABI['2026'].map(e => [e.id, e]));
 const badRef = Object.entries(REFRESHER_2026).filter(([id, want]) =>
@@ -1404,8 +1510,10 @@ const CHART_2026_OVERLAY_TRAPS = {
   'T-10': ['AAS-04', 'IAT-08'],                          /* AAS-04 arrives via join K from B-14 */
 };
 const by26t = Object.fromEntries(SYLLABI['2026'].map(e => [e.id, e]));
-const trapped = Object.entries(CHART_2026_OVERLAY_TRAPS).filter(([id, want]) =>
-  JSON.stringify((by26t[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+const trapped = Object.entries(CHART_2026_OVERLAY_TRAPS).filter(([id, want0]) => {
+  const want = USER_EDITS_2026[id] || want0; /* the user's own edits supersede */
+  return JSON.stringify((by26t[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort());
+});
 ok('2026 links that the extracted chart images get wrong stay right', trapped.length === 0,
   trapped.map(([id]) => `${id}=[${(by26t[id]?.prereqs || []).join(',')}]`).join(' | '));
 
