@@ -21,9 +21,8 @@ date may enter it. Two smoke checks enforce this.
 
 ## Where things stand
 
-`main` and `claude/read-handoff-tyugyx` are level. `npm run smoke` is **163 checks, green**.
-All five interface packages are merged and verified live. The last commit was still
-publishing at handoff — **run `npm run live` and look at the screenshot before anything else.**
+`npm run smoke` is **176 checks, green**. All five interface packages are merged and
+verified live. **Run `npm run live` and look at the screenshot before anything else.**
 
 ### Fixed after the user tested it live (8 Aug)
 
@@ -95,13 +94,10 @@ does not; all four were previously confirmed by the user and are pinned.
 ### The document itself — the far better source (8 Aug)
 
 The user supplied the sanitised `.docx`. **Read its text, never its chart images** (see
-`CLAUDE.md`). Three parts settle almost everything, and beat any chart transcription:
-
-| Section | What it gives |
-|---|---|
-| `FLYING MODULE (LONG CONVERSION – "B" Course)` | per-event `Prerequisites` for 2026 |
-| `FLYING MODULE (SHORT CONVERSION – "Tx" Course)` | per-event `Prerequisites` for Tx |
-| Two `TRAINING CURRICULUM TRACK SHEET`s | the authoritative **event list** per course |
+`CLAUDE.md`). Three parts settle almost everything: the two `FLYING MODULE` sections
+(per-event Device / Crew / Prerequisites for each course, the SHORT one with its own
+values for the renumbered sorties) and the two `TRAINING CURRICULUM TRACK SHEET`s
+(the authoritative event list per course).
 
 **The track sheet's serial-number column is the membership test.** Both sheets print all
 209 rows; a row with **no S/N** is one that course does not do. Tx leaves 14 blank —
@@ -144,16 +140,21 @@ marking, so the app looked like it had nothing to save when it did.
   more on it.
 - Switching student scrolls to their last mark but does **not** switch syllabus. Switching
   under them would be a surprise and would prompt about unsaved flow edits.
-- ~~**Tx `SAT-1`**~~ — done 8 Aug, on **both** Tx years, and since **confirmed by the
-  document**: the Tx flying module gives `SAT-1` [`SA-5`, `SAT(S)-2`], and the Tx track
-  sheet annotates its own `SA-05` as *(BCTM SA-6)* — the exact flight 2026 makes `SAT-1`
-  wait for. `SAT(S)-2` is unnumbered on that sheet, so `SAT(S)-1` is the sim that applies,
-  which is also the one Tx's `SATN-1` names. Pinned by `TX_SAT1`.
-- **`SA(S)-3` on Tx — a live contradiction inside the document.** The track sheet leaves it
-  unnumbered (not flown); the Tx flying module still requires it for `SA-2` and `SA-3`.
-  **The user chose to keep it, 8 Aug**, having confirmed that sim chain twice before. Pinned,
-  so the blank row cannot be "corrected" into a deletion. If they come back from the
-  squadron with an answer, that pin is the one to change.
+- ~~**Tx `SAT-1`**~~ — done 8 Aug, both Tx years, confirmed by the document (Tx module
+  says `SA-5`; the Tx sheet marks its `SA-05` *(BCTM SA-6)*; `SAT(S)-2` unnumbered so
+  `SAT(S)-1` applies). Pinned by `TX_SAT1`.
+- **`SA(S)-3` on Tx** — document contradicts itself (sheet: unnumbered; Tx table: required
+  by `SA-2`/`SA-3`). **User chose keep, twice, 8 Aug.** It now hangs off the sim chain only.
+- **The user's own 2026 became the baked default, 8 Aug** — their saved file's nine hand
+  edits plus 39 repositioned balls and redrawn wires (see `USER_EDITS_2026` in `smoke.mjs`;
+  they supersede the map pins). Tx 2026 mirrors those edits (`TX_MIRROR`), except `SA-5`,
+  which keeps the doc-stated `[SA-4, SA(S)-6, SA(S)-7]`. `ST-10` now dangles by design.
+- **Detail bubbles are per-syllabus now.** `EVENT_INFO_BY_SYL['Tx 2026']` carries the
+  renumbered profiles (Tx `BFM-5` = BCTM `BFM-7`, `SA-5` = `SA-6` crew-solo, `TI-2` =
+  8-ship `TI-3`, `LASDT-2` = `LASDT-3`, `TR-5(P)` = IRT `UP / IRE`), merged in `infoFor`
+  under the user's own edits. Every bare-id prerequisite TEXT was blanked (98) so bubbles
+  fall back to the live chart links of the active syllabus — `SAT-1` had shown DAAR's text.
+  Prose notes kept; list in `PROSE_OK`.
 - **Tx `SA-1`, `SA(S)-1`, `NTR(S)-1`, `SA-5`** still differ from 2026 in ways that are
   defensible either way — each involves an event the short course cuts. Deliberately left
   alone. (`SA-1`→`TI-2` and the four `DAAR`/`NAAR` refreshers are done, at their request.)

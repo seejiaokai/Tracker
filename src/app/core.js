@@ -8,7 +8,7 @@
    ========================================================================== */
 import { SYLLABI, SYL_NAMES, DEFAULT_SYL_NAME, DEFAULT_SYL_ORDER } from '../data/syllabi.js';
 import { DEFAULT_LAYOUTS } from '../data/layouts.js';
-import { EVENT_INFO } from '../data/eventInfo.js';
+import { EVENT_INFO, EVENT_INFO_BY_SYL } from '../data/eventInfo.js';
 import { SEED_STATE, SEED_STAMP } from '../data/seedState.js';
 import { storage, flushNow, loadLatest, cloudButtonClick, setCloudSinks, getCloudCache, cloudCfg } from '../sync/cloud.js';
 import * as FMT from './fileFormat.js';
@@ -38,7 +38,13 @@ export const DONE = new Set(['dco', 'dpco', 'marg']);
 export let eventInfo = {}; export let showDetails = false;
 async function loadEventInfo() { try { const r = await sGet('v3:eventinfo'); eventInfo = r ? JSON.parse(r) : {}; } catch (e) { eventInfo = {}; } }
 async function saveEventInfo() { await sSet('v3:eventinfo', JSON.stringify(eventInfo)); }
-export function infoFor(id) { return Object.assign({}, EVENT_INFO[id] || {}, eventInfo[id] || {}); }
+/* Base info, then the active syllabus's own profile for that id (the short
+   course renumbers sorties, so e.g. its BFM-5 flies the BFM-7 profile), then
+   the user's own edits on top. */
+export function infoFor(id) {
+  const bySyl = (EVENT_INFO_BY_SYL[curSyl()] || {})[id];
+  return Object.assign({}, EVENT_INFO[id] || {}, bySyl || {}, eventInfo[id] || {});
+}
 /* Prereq wording for display: the free-text note if there is one, otherwise the
    actual chart links. */
 export function preText(id) {
