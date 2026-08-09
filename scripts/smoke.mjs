@@ -2199,12 +2199,14 @@ ok('no event the map strikes through is still in 2026', revived.length === 0, re
    - the refresher tail, now shaped exactly as 2026's: DAAR -> DAAR-2, a
      separate DAAR/NAAR -> NAAR-2, and ST-18 no longer taking the tail. Asked
      for, and matching what they already did on the other two charts.
-   - five links the map draws that their file no longer carries (AAS-04, and
-     one feeder each on INT(S)-1, TR-1(P), TR-2, TR-4). In every case the other
-     feeders of the same bundle survive as line-derived links, so these look
-     like drops from redrawing those bundles rather than decisions. RAISED WITH
-     THE USER 9 Aug; recorded here as their file has them, not endorsed. Put
-     them back only on their word. */
+   - two links the map draws that their file still does not carry: EPE -> AAS-04
+     and TR(S)-4 -> TR-2. Five were missing when the redraw first came back; the
+     user restored three of them (IAT-07 -> INT(S)-1, TR(S)-3 -> TR-1(P),
+     EPE -> TR-4) in their next save, which confirms the whole group was dropped
+     by redrawing those bundles rather than chosen. The remaining two are RAISED
+     AND STILL UNANSWERED - recorded as their file has them, not endorsed. Those
+     three are deliberately NOT listed here any more, so the map governs them
+     again and a future drop fails instead of being excused. */
 const USER_EDITS_AGAA = {
   'DAAR': ['INT(S)-2', 'TR-4'],
   'DAAR-2': ['DAAR'],
@@ -2213,10 +2215,7 @@ const USER_EDITS_AGAA = {
   'ST-18': ['SAT-2', 'SATN-1'],
   'SAN-1': ['NTR-1', 'SA(S)-7'],
   'AAS-04': [],
-  'INT(S)-1': ['IEPE/IPC', 'ST-09', 'ST-11'],
-  'TR-1(P)': ['EPT-02', 'JMP-01', 'ST-16'],
   'TR-2': ['TR-1(P)'],
-  'TR-4': ['TR-3'],
 };
 {
   const bya = Object.fromEntries(SYLLABI['A/G - A/A 2026'].map(e => [e.id, e]));
