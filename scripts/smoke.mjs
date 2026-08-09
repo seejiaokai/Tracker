@@ -1295,10 +1295,13 @@ if (two.length >= 2) {
     `scrolled to ${away}px, switching back moved to ${back.scrollTop}px`);
 }
 
-/* A recorded syllabus that has since been deleted must not break the load. */
+/* A recorded syllabus that has since been deleted must not break the load.
+   The "ocu:" prefix is not decoration: sync/local.js only ever reads keys that
+   carry it, so this check spent its whole life planting a key the app never
+   looked at and asserting that nothing broke — which nothing would have. */
 ok('a remembered syllabus that no longer exists does not break opening the app',
   await pg.evaluate(async () => {
-    localStorage.setItem('v3:' + document.getElementById('courseSel').value + ':lastStudent', 'NO SUCH PERSON');
+    localStorage.setItem('ocu:v3:' + document.getElementById('courseSel').value + ':lastStudent', 'NO SUCH PERSON');
     return true;
   }));
 await pg.reload({ waitUntil: 'networkidle' });
@@ -1396,6 +1399,61 @@ await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
   } else {
     /* Not a soft skip: an empty roster here means the block measured nothing. */
     ok('the crew reorder checks have a roster to work with', false, `roster: ${roster0.join(',')}`);
+  }
+}
+
+/* ---- the app reopens where YOU left it, and tells nobody else ----
+   It always opened on COURSES[0] before, so a second course could never be the
+   one that greeted you. Runs on from the two-course state above. */
+{
+  await pg.selectOption('#courseSel', 'SMOKE FIRST'); await pg.waitForTimeout(800);
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+  ok('the app reopens on the course you were last on',
+    await pg.inputValue('#courseSel') === 'SMOKE FIRST', await pg.inputValue('#courseSel'));
+
+  /* Both halves matter. The negative alone passes when nothing is stored at
+     all, which is exactly how a feature that never wrote anything would look. */
+  const where = await pg.evaluate(() => ({
+    mine: localStorage.getItem('ocuLocal:lastCourse'),
+    shared: Object.keys(localStorage).filter(k => k.startsWith('ocu:') && /lastCourse/i.test(k)),
+  }));
+  ok('that memory is this browser\'s alone, not in the shared file',
+    where.mine === 'SMOKE FIRST' && where.shared.length === 0,
+    `mine=${where.mine}, shared=[${where.shared.join(',')}]`);
+
+  /* Remembering a course that has since gone must not strand the app. */
+  await pg.evaluate(() => localStorage.setItem('ocuLocal:lastCourse', 'NO SUCH COURSE'));
+  const errsBefore = errs.length;
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+  /* Read the HEADING, not the dropdown. A <select> whose value names no option
+     silently reports its first one instead, so #courseSel says "26ABSG" even
+     when the app has actually loaded a course that does not exist — the check
+     passed against a build with the membership test removed. #courseTitle is
+     rendered straight from the loaded course, so it cannot lie. */
+  const fellBack = await pg.textContent('#courseTitle');
+  ok('a remembered course that no longer exists falls back cleanly',
+    fellBack === '26ABSG PROGRESS TRACKER'
+    && await pg.locator('#flowSvg .ball').count() > 0 && errs.length === errsBefore,
+    `${fellBack}, ${errs.length - errsBefore} new page errors`);
+
+  /* Selecting a crew member has to count on its own. Only grading did before,
+     so choosing someone and coming back tomorrow forgot them. Pick the person
+     who is NOT the one graded above, or the check passes either way. */
+  const crewNow = await pg.evaluate(() => [...document.querySelectorAll('#activeSel option')].map(o => o.value));
+  const opening = await pg.inputValue('#activeSel');
+  const other = crewNow.find(n => n !== opening);
+  if (other) {
+    await pg.selectOption('#activeSel', other); await pg.waitForTimeout(500);
+    await pg.reload({ waitUntil: 'networkidle' });
+    await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+    ok('the app reopens on the crew member you last looked at, without grading anyone',
+      await pg.inputValue('#activeSel') === other,
+      `wanted ${other}, got ${await pg.inputValue('#activeSel')}`);
+  } else {
+    ok('the crew-memory check has someone other than the opening pick to choose',
+      false, `roster ${crewNow.join(',')}, opened on ${opening}`);
   }
 }
 

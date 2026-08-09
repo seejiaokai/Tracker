@@ -93,6 +93,20 @@ const mem = {};
 async function sGet(k) { try { const r = await storage.get(k); return r ? r.value : null; } catch (e) { return mem[k] ?? null; } }
 async function sSet(k, v) { mem[k] = v; setSaveStatus('', 'saving'); try { await storage.set(k, v); setSaveStatus('', 'ok'); } catch (e) { setSaveStatus('local only', 'ok'); } }
 
+/* ---------- this browser's own preferences ----------
+   Which course and which crew member you were last on is a view preference,
+   not data. Everything that goes through sSet lands in ONE SharePoint file
+   that the whole team shares, so storing it there would let whoever used the
+   app last decide what opens for everybody else.
+   The prefix matters: sync/local.js sweeps EVERY "ocu:" localStorage key into
+   that shared map on its fallback path, so this deliberately sits outside it.
+   Both calls swallow their errors (Safari private mode), which means a store
+   that cannot be read degrades to "opens on the first course" rather than
+   breaking the boot. */
+const PP = 'ocuLocal:';
+function prefGet(k) { try { return localStorage.getItem(PP + k); } catch (e) { return null; } }
+function prefSet(k, v) { try { localStorage.setItem(PP + k, v); } catch (e) {} }
+
 /* ---------- app state ---------- */
 export let COURSES = [], course = null, active = null;
 export let SYL = [], byid = {}, roster = [], marks = {}, dates = {}, plan = {};
@@ -343,6 +357,9 @@ async function migrateRosters(c) {
 async function loadCourse(c, restoreLastSyllabus = false) {
   loading = true;
   course = c;
+  /* One site covers init, switchCourse, addCourse, renCourse and delCourse.
+     Raw and synchronous, so unlike sSet it never flickers the save status. */
+  prefSet('lastCourse', c);
   const pr = await sGet(kPlan(c)); plan = pr ? JSON.parse(pr) : { lulls: [], mode: 'pace', epw: 2, target: null, sylName: DEFAULT_SYL_NAME, custom: false };
   if (!plan.sylName) plan.sylName = DEFAULT_SYL_NAME;
   const cs = await sGet(kSyls(c)); CUSTOMS = cs ? JSON.parse(cs) : {};
@@ -391,7 +408,13 @@ async function loadCourse(c, restoreLastSyllabus = false) {
   await migrateRosters(c);
   const rr = await sGet(kRosterFor(c, plan.sylName));
   roster = rr ? JSON.parse(rr) : [];
-  active = (__lastS && roster.includes(__lastS)) ? __lastS : (roster[0] || null);
+  /* Your own last pick first, then the last person anyone GRADED on this course
+     (kLastStudent), then whoever is at the top. The roster is per syllabus, so
+     the includes() guard quietly handles remembering someone who is not on the
+     syllabus being opened. */
+  const __myS = prefGet('lastCrew:' + c);
+  active = (__myS && roster.includes(__myS)) ? __myS
+    : ((__lastS && roster.includes(__lastS)) ? __lastS : (roster[0] || null));
   await loadLayout();
   await loadStudent();
   /* one-time marks + layout migration from the old syllabus name */
@@ -2019,6 +2042,9 @@ export async function removeStudent(v) {
 }
 export function setActive(v) {
   active = v; renderSide();
+  /* Merely looking at someone counts. Before this, only grading was remembered,
+     so picking a crew member and coming back tomorrow forgot them. */
+  prefSet('lastCrew:' + course, v);
   /* Jump to where this student was last marked, so picking someone halfway
      through their course does not land at the top of the chart. */
   showLastEdit(v);
@@ -2820,7 +2846,12 @@ export async function init() {
   await applyBundle();
   await loadCourses();
   await loadSylPrefs();
-  await loadCourse(COURSES[0], true); await loadEventInfo(); await loadSylOrder();
+  /* After loadCourses, which is what fills COURSES — a course that was deleted,
+     renamed, or only ever existed in someone else's browser simply fails the
+     membership test and falls back to the top of the list. */
+  const __want = prefGet('lastCourse');
+  await loadCourse((__want && COURSES.includes(__want)) ? __want : COURSES[0], true);
+  await loadEventInfo(); await loadSylOrder();
   ready = true;
   refreshCourses(); refreshSyl(); refreshActive(); renderBoard(); renderSide();
   /* After the first paint, so the balls exist to measure. */
