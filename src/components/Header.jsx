@@ -134,10 +134,6 @@ export default function Header() {
           <button className="sm" id="ordCrew" title="Change the order crew appear in the dropdown and on every ball" onClick={core.openOrdCrew}>⇅ Reorder crew</button>
         </Menu>
         <HeaderSearch />
-        {/* A real element, not margin-left:auto on the next control: with a
-            wrapping bar an auto margin applies per flex line, so the right-hand
-            group's alignment would depend on where it happened to wrap. */}
-        <span className="hspacer" />
 
         <label className="sub">Course{' '}
           <select id="courseSel" value={core.course || ''} onChange={e => core.switchCourse(e.target.value)}>
@@ -165,6 +161,12 @@ export default function Header() {
           <div className="msep" />
           <button className="sm" id="delSyl" title="Delete the current syllabus, built-in or custom. Deleted built-ins can be restored from Reorder." onClick={core.delSyl}>🗑 Delete syllabus</button>
         </Menu>
+        {/* Everything used to CHOOSE what you are looking at sits to the left of
+            this; everything you DO sits to the right. A real element rather than
+            margin-left:auto on the File menu: with a wrapping bar an auto margin
+            applies per flex line, so the right-hand group's alignment would
+            depend on where the bar happened to wrap. */}
+        <span className="hspacer" />
 
         <Menu id="file" label="File" title="Open your file, bring a syllabus in, or hand a copy over">
           <button className="sm" id="openFileBtn" title="Open your syllabus file, or start a new one" onClick={core.openFileClick}>📁 Open…</button>

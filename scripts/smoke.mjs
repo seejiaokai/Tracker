@@ -756,7 +756,10 @@ ok('the whole header stays one row at 1440, title included',
    It is the control that gets changed first every session and it used to sit
    fifth, wedged between the Syllabus and File menus. */
 const crewFirst = await pg.evaluate(() => {
-  const vis = [...document.querySelectorAll('header .controls select, header .controls button')]
+  /* inputs too, or the search box — the one control this order is about — is
+     invisible to every assertion below. The File menu's tick-boxes are inputs
+     as well, but they measure 0 wide while the menu is shut. */
+  const vis = [...document.querySelectorAll('header .controls select, header .controls button, header .controls input')]
     .filter(e => e.getBoundingClientRect().width > 0);
   const ids = vis.map(e => e.id);
   const r = id => document.getElementById(id).getBoundingClientRect();
@@ -771,6 +774,36 @@ ok('the picker is labelled Crew, not Marking as',
   crewFirst.words.includes('Crew') && !crewFirst.words.includes('Marking as'));
 ok('View sits right after Crew',
   crewFirst.ids.indexOf('viewMenuBtn') === 1, crewFirst.ids.slice(0, 3).join(' → '));
+
+/* The whole bar, written down. The user could not tell from the app which order
+   the controls were in, and neither could this suite — every check above looks
+   at one control at a time. Save changes is left out: it only exists while
+   there is something unsaved. */
+ok('the bar reads Crew · View · search · Course · Syllabus · File · Edit · Show All Details',
+  crewFirst.ids.join(',') === ['activeSel', 'viewMenuBtn', 'hSearch', 'hSearchClear',
+    'courseSel', 'courseMenuBtn', 'sylSel', 'sylMenuBtn',
+    'fileMenuBtn', 'arrangeBtn', 'detailsBtn'].join(','),
+  crewFirst.ids.join(' → '));
+
+/* WHERE THE GAP FALLS, which none of the above can see: the spacer is a <span>,
+   so moving it changes no id and no height, and every check here stayed green
+   while it sat in the wrong place. Everything used to choose what you are
+   looking at belongs left of the space; everything you do belongs right of it. */
+const biggestGap = await pg.evaluate(() => {
+  const vis = [...document.querySelectorAll('header .controls select, header .controls button, header .controls input')]
+    .filter(e => e.getBoundingClientRect().width > 0)
+    .map(e => ({ id: e.id, l: e.getBoundingClientRect().left, r: e.getBoundingClientRect().right }))
+    .sort((a, b) => a.l - b.l);
+  let best = { px: -1, before: null, after: null };
+  for (let i = 1; i < vis.length; i++) {
+    const px = vis[i].l - vis[i - 1].r;
+    if (px > best.px) best = { px: Math.round(px), before: vis[i - 1].id, after: vis[i].id };
+  }
+  return best;
+});
+ok('the empty space in the bar falls after Syllabus, not before Course',
+  biggestGap.before === 'sylMenuBtn' && biggestGap.after === 'fileMenuBtn' && biggestGap.px > 60,
+  `${biggestGap.px}px between ${biggestGap.before} and ${biggestGap.after}`);
 
 /* ---- finding one ball on a 210-event chart ---- */
 {
