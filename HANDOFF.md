@@ -1,4 +1,4 @@
-# Handoff: OCU Progress Tracker — 8 Aug 2026
+# Handoff: OCU Progress Tracker — 9 Aug 2026
 
 ## Read this first
 
@@ -21,8 +21,21 @@ date may enter it. Two smoke checks enforce this.
 
 ## Where things stand
 
-`npm run smoke` is **176 checks, green**. All five interface packages are merged and
-verified live. **Run `npm run live` and look at the screenshot before anything else.**
+`npm run smoke` is **190 checks, green**. Everything through PR #15 is merged and verified
+on the live site. **Run `npm run live` and look at the screenshot before anything else.**
+
+**The working loop with the user (established 8–9 Aug, keep it):** they edit charts in the
+app and send their `WITH-STUDENTS` file → read ONLY its `charts` block, diff against baked,
+bake their edits (their stale `2024`/`Tx 2024` copies are noise — skip), PR, they say
+"merge" → verify live → send back a charts-only sync JSON they open and re-save. Their
+word choices for chart names/order are authoritative; mirror them exactly. Every PR merge
+now hits a **history conflict** (squash-merges): `git merge origin/main -X ours` — our
+branch supersedes — rebuild, re-run smoke, push, then merge the PR.
+
+**Current charts:** `2024 · 2026 · Tx 2026 · A/G - A/A 2026 · Tx 2024` (their order).
+`Tx 2026` IS the 2026 replica (built as "v2", renamed by the user 9 Aug; old Tx deleted;
+pin asserts the v2 name is gone). The DAAR/NAAR refresher tail is detached from `ST-18`
+on both 2026 charts — `NAAR-2` is a deliberate second loose end.
 
 ### Fixed after the user tested it live (8 Aug)
 
@@ -61,9 +74,6 @@ and pinned: `scripts/course-map-2026.json` (DEFAULT, B-11…B-22) and
 naming (`AVI-12A/B`, `IEPE`, `NTR(S)-1 + IPC(W)`) and the DAAR/NAAR split the user asked
 for. **A/G – A/A** matches too, apart from four links the syllabus keeps and the drawing
 does not; all four were previously confirmed by the user and are pinned.
-
-**Tx 2026 was badly broken and is repaired** — 19 links restored, including the whole
-`AAM-06…AAM-10` chain, which had no prerequisites at all, and the `SA(S)` sim chain.
 
 ### If you re-read these maps, know this first
 
@@ -121,22 +131,13 @@ partial cause (the dot never lit after marking).
   more on it.
 - Switching student scrolls to their last mark but does **not** switch syllabus. Switching
   under them would be a surprise and would prompt about unsaved flow edits.
-- ~~**Tx `SAT-1`**~~ — done 8 Aug, both Tx years, confirmed by the document (Tx module
-  says `SA-5`; the Tx sheet marks its `SA-05` *(BCTM SA-6)*; `SAT(S)-2` unnumbered so
-  `SAT(S)-1` applies). Pinned by `TX_SAT1`.
-- **`SA(S)-3` on Tx** — document contradicts itself (sheet: unnumbered; Tx table: required
-  by `SA-2`/`SA-3`). **User chose keep, twice, 8 Aug.** It now hangs off the sim chain only.
-- **The user's own 2026 became the baked default, 8 Aug** — their saved file's hand edits
-  plus 39 repositioned balls and redrawn wires (see `USER_EDITS_2026` in `smoke.mjs`; they
-  supersede the map pins). Tx 2026 mirrors those edits (`TX_MIRROR`), except `SA-5`, which
-  keeps the doc-stated `[SA-4, SA(S)-6, SA(S)-7]`. One edit they recalled the same day:
-  `ST-10` feeds `LASDT(S)-1` again, as the map draws it.
-- **`Tx 2026` IS the 2026 replica now.** Built 8 Aug as `Tx 2026 v2` (fresh name because
-  **stored charts shadow baked ones of the same name** — the ✎ in the picker); on 9 Aug
-  the user deleted the old Tx in the app, renamed v2 to `Tx 2026`, and the baked data
-  follows: old chart gone, v2 name retired everywhere (pinned). `V2_REMOVED` lists the ten
-  cut events; `USER_TX_EDITS` their own Tx wiring. The DAAR/NAAR refresher tail is
-  deliberately detached from `ST-18` on both 2026 charts — `NAAR-2` is a second loose end.
+- **`SA(S)-3` on Tx** — the document contradicts itself (sheet: unnumbered; table:
+  required). **User chose keep, twice, 8 Aug.** It hangs off the sim chain only.
+- **The user's charts ARE the baked defaults now** — their file's edits supersede the map
+  pins (`USER_EDITS_2026`, `USER_TX_EDITS`, `TX_MIRROR` in `smoke.mjs`). `SAT-1`/`SA-5`
+  doc work all landed 8 Aug (`TX_SAT1`); `ST-10` feeds `LASDT(S)-1` again (their recall).
+- **The edit-mode hint now overlays the colour legend** (it floats so it cannot shove the
+  chart mid-line-draw). If the user misses the legend while editing, move the hint.
 - **Detail bubbles are per-syllabus now.** `EVENT_INFO_BY_SYL['Tx 2026']` carries the
   renumbered profiles (Tx `BFM-5` = BCTM `BFM-7`, `SA-5` = `SA-6` crew-solo, `TI-2` =
   8-ship `TI-3`, `LASDT-2` = `LASDT-3`, `TR-5(P)` = IRT `UP / IRE`), merged in `infoFor`
