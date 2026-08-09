@@ -42,11 +42,24 @@ export let eventInfo = {}; export let showDetails = false;
    event to the values of the day the file was saved — which sat above the
    per-syllabus profiles and quietly clobbered them. Scrubbing on load heals
    stores polluted that way; it never touches a real user edit. */
+/* __kept marks fields the user typed deliberately even though they match the
+   baked base. That happens on a renumbered syllabus: Tx's SA-5 ships with
+   "(Refer to BCTM SA-6)" on the end, so deleting that note leaves exactly the
+   base wording — indistinguishable, by value alone, from a field a file merely
+   carried along. Scrubbing pruned it and the note came back on the next load.
+   The marker is what tells the two apart; a file's bulk table has none, so it
+   is still pruned exactly as before. */
 function scrubEventInfo() {
   for (const k of Object.keys(eventInfo)) {
     const base = EVENT_INFO[k] || {}; const o = eventInfo[k]; const diff = {};
-    Object.keys(o).forEach(f => { if ((o[f] || '') !== (base[f] || '')) diff[f] = o[f]; });
-    if (Object.keys(diff).length) eventInfo[k] = diff; else delete eventInfo[k];
+    const kept = Array.isArray(o.__kept) ? o.__kept : [];
+    Object.keys(o).forEach(f => {
+      if (f === '__kept') return;
+      if ((o[f] || '') !== (base[f] || '') || kept.includes(f)) diff[f] = o[f];
+    });
+    const stillKept = kept.filter(f => f in diff);
+    if (stillKept.length) diff.__kept = stillKept;
+    if (Object.keys(diff).filter(f => f !== '__kept').length) eventInfo[k] = diff; else delete eventInfo[k];
   }
 }
 async function loadEventInfo() {
@@ -364,6 +377,10 @@ async function loadCourse(c, restoreLastSyllabus = false) {
   /* A ring left over from another syllabus would re-light the moment the user
      came back to it. Cleared without redrawing: every caller renders anyway. */
   searchHit = null; searchQ = ''; searchCount = 0; searchAt = 0;
+  /* History belongs to the chart it was recorded on. Switching COURSE never
+     went through clearDirty, so an Undo pressed afterwards stamped the old
+     course's chart onto the new one's syllabus and saved it immediately. */
+  undoStack = []; redoStack = [];
   const pr = await sGet(kPlan(c)); plan = pr ? JSON.parse(pr) : { lulls: [], mode: 'pace', epw: 2, target: null, sylName: DEFAULT_SYL_NAME, custom: false };
   if (!plan.sylName) plan.sylName = DEFAULT_SYL_NAME;
   const cs = await sGet(kSyls(c)); CUSTOMS = cs ? JSON.parse(cs) : {};
@@ -581,7 +598,10 @@ function ballGroup(ev, available) {
     const fill = (g && g !== 'na' && g !== 0) ? GRADE_FILL[g] : (g === 'na' ? GRADE_FILL.na : '#ffffff');
     const [a0, a1] = wedge(i, n);
     segs += `<path d="${sector(cx, cy, rO, rI, a0, a1)}" fill="${fill}" stroke="#111" stroke-width="0.8"/>`;
-    const f = failOf(s, ev.id);
+    /* No failure ticks on an event marked N.A. — it never had to be flown, so
+       red marks against it read as a contradiction. The count is only hidden,
+       not thrown away; it comes back if the grade does. */
+    const f = (g === 'na') ? 0 : failOf(s, ev.id);
     if (f > 0) {
       const shown = Math.min(f, 6); const span = Math.abs(a1 - a0); const gap = Math.min(9, span / (shown + 1)); const mid = (a0 + a1) / 2; const first = mid - (shown - 1) / 2 * gap;
       for (let t = 0; t < shown; t++) {
@@ -614,10 +634,22 @@ function ballGroup(ev, available) {
 function computeFlow() {
   const COL = 84, ROW = 92, R = 29;
   const level = {};
+  /* `busy` breaks prerequisite loops. Without it a chart where A waits for B
+     and B waits for A recurses until the stack gives out, and because
+     renderBoard calls this every time, the board never draws again — the app
+     looks dead. Files are refused before they get here (fileFormat.checkCharts)
+     but the JSON editor and older stored charts can still hold a loop, so the
+     engine treats one as "already placed" and carries on drawing. */
+  const busy = {};
   function lvl(id) {
-    if (level[id] != null) return level[id]; const e = byid[id]; if (!e) return 0;
+    if (level[id] != null) return level[id];
+    if (busy[id]) return 0;
+    const e = byid[id]; if (!e) return 0;
     const ps = (e.prereqs || []).filter(p => byid[p]); if (!ps.length) return level[id] = 0;
-    let m = 0; ps.forEach(p => { m = Math.max(m, lvl(p) + 1); }); return level[id] = m;
+    busy[id] = 1;
+    let m = 0; ps.forEach(p => { m = Math.max(m, lvl(p) + 1); });
+    delete busy[id];
+    return level[id] = m;
   }
   SYL.forEach(e => lvl(e.id));
   // place root 'feeder' events (no prereqs but feed a mid-chain node) just above what they feed
@@ -1769,18 +1801,22 @@ export async function deleteFromEditModal() {
 }
 
 /* ---------- stats ---------- */
+/* Each entry carries `ready`. When nothing in a category can be flown yet this
+   still names what is coming, but says so — rendered identically to a genuine
+   next event, four unflyable suggestions sat under the words "either can be
+   flown next" on a chart with nothing marked at all. */
 export function nextOfCat(s, pred) {
   const cands = SYL.filter(e => pred(e) && !isDone(s, e.id) && gradeOf(s, e.id) !== 'na');
   if (!cands.length) return [];
   const avail = cands.filter(e => e.prereqs.every(p => isDone(s, p) || gradeOf(s, p) === 'na' || !byid[p]));
-  let pool;
-  if (avail.length) { pool = avail.slice(); }
+  let pool, ready;
+  if (avail.length) { pool = avail.slice(); ready = true; }
   else {
     const first = cands.slice().sort((a, b) => a.seq - b.seq)[0];
     const sibs = cands.filter(e => e !== first && JSON.stringify(e.prereqs) === JSON.stringify(first.prereqs));
-    pool = [first, ...sibs];
+    pool = [first, ...sibs]; ready = false;
   }
-  return pool.sort((a, b) => a.seq - b.seq).slice(0, 3);
+  return pool.sort((a, b) => a.seq - b.seq).slice(0, 3).map(e => ({ id: e.id, seq: e.seq, ready }));
 }
 export function stats(s) {
   const r = { buckets: {}, totDone: 0, totAct: 0 };
@@ -2007,6 +2043,11 @@ export async function popFail(delta) {
   const s = active; const popId = pop && pop.id; if (!popId || !s) return;
   marks[s] = marks[s] || {};
   marks[s][popId] = marks[s][popId] || { g: 0, f: 0 };
+  /* Not applicable means it never has to be flown, so it cannot be failed.
+     Counting up was allowed and the ball then wore red failure ticks over the
+     N/A colour. Existing counts are kept, not wiped — mark it back to a real
+     grade and the history is still there. */
+  if (delta > 0 && gradeOf(s, popId) === 'na') { flashHint('“' + popId + '” is marked N.A., so it cannot be failed.'); return; }
   marks[s][popId].f = Math.max(0, (marks[s][popId].f || 0) + delta);
   await saveMarks(s); renderBoard(); renderSide();
 }
@@ -2053,14 +2094,24 @@ export async function saveInfoFor(id, vals) {
      used to be stored as a global override, pushing Tx wording onto every chart.
      One save of SA-5 on Tx did exactly that. */
   const base = Object.assign({}, EVENT_INFO[id] || {}, (EVENT_INFO_BY_SYL[curSyl()] || {})[id] || {});
-  const diff = {};
-  Object.keys(o).forEach(k => { if (o[k] !== (base[k] || '')) diff[k] = o[k]; });
-  if (Object.keys(diff).length) eventInfo[id] = diff; else delete eventInfo[id];
-  await saveEventInfo(); renderBoard(); renderSide();
+  const plain = EVENT_INFO[id] || {};
+  const diff = {}; const kept = [];
+  Object.keys(o).forEach(k => {
+    if (o[k] === (base[k] || '')) return;
+    diff[k] = o[k];
+    /* Deliberate, but equal to the baked base — only a marker keeps the scrub
+       on the next load from deciding it was redundant and dropping it. */
+    if (o[k] === (plain[k] || '')) kept.push(k);
+  });
+  if (kept.length) diff.__kept = kept;
+  if (Object.keys(diff).filter(k => k !== '__kept').length) eventInfo[id] = diff; else delete eventInfo[id];
+  /* Event details ride in the user's file, so changing them is unsaved work.
+     Without this the Save button never lit and the file quietly fell behind. */
+  await saveEventInfo(); markFileDirty(); renderBoard(); renderSide();
 }
 export async function resetInfoFor(id) {
   if (!id) return;
-  delete eventInfo[id]; await saveEventInfo(); renderBoard(); notify();
+  delete eventInfo[id]; await saveEventInfo(); markFileDirty(); renderBoard(); notify();
 }
 export async function saveInfo(vals) {
   const id = infoId; if (!id) return;
@@ -2082,9 +2133,30 @@ export async function addStudent() {
   active = v; refreshActive(); renderBoard(); renderSide();
 }
 export async function removeStudent(v) {
-  if (!await uiConfirm('Remove ' + v + '?')) return;
+  if (!await uiConfirm('Remove ' + v + ' from ' + plan.sylName + '?\n\nTheir marks, dates, pace and lull periods on this syllabus are deleted.')) return;
   roster = roster.filter(x => x !== v); delete marks[v]; delete dates[v];
-  await saveRoster(); if (active === v) active = roster[0] || null; refreshActive(); renderBoard(); renderSide();
+  await saveRoster();
+  /* Deleting the roster entry alone left their name and every mark sitting in
+     storage — and on a shared tracker, in the file the whole team reads. Worse,
+     adding the same callsign back handed them the old pace and lull periods
+     while the marks started clean, which is the most confusing outcome of all. */
+  await delKey(kMarksFor(course, plan.sylName, v));
+  await delKey(kDatesFor(course, plan.sylName, v));
+  await delKey(kDatesOld(course, v));
+  await delKey(kLast(course, v));
+  /* Pace and lulls belong to the course; only drop them once this person is
+     off every syllabus in it, or removing them from one chart would wipe the
+     pacing they still need on another. */
+  let elsewhere = false;
+  for (const sn of [...new Set([...SYL_NAMES, ...Object.keys(CUSTOMS || {})])]) {
+    if (sn === plan.sylName) continue;
+    try { const rr = await sGet(kRosterFor(course, sn)); if ((rr ? JSON.parse(rr) : []).includes(v)) { elsewhere = true; break; } } catch (_) {}
+  }
+  if (!elsewhere) { await delKey(kPace(course, v)); await delKey(kLulls(course, v)); delete pace[v]; delete lulls[v]; }
+  if ((await sGet(kLastStudent(course))) === v) await delKey(kLastStudent(course));
+  if (prefGet('lastCrew:' + course) === v) prefSet('lastCrew:' + course, '');
+  if (active === v) active = roster[0] || null;
+  refreshActive(); renderBoard(); renderSide();
 }
 export function setActive(v) {
   active = v; renderSide();
@@ -2247,6 +2319,22 @@ export async function renCourse() {
     }
   }
   for (const s of roster) await move(kDatesOld(old, s), kDatesOld(v, s));
+  /* Pace, target dates and lull periods hang off the COURSE, not a syllabus,
+     so the per-syllabus loop above never reached them and a rename silently
+     wiped every student's pacing. Gather everyone who appears on any roster of
+     the old course, not just the one on screen. */
+  const everyone = new Set(roster);
+  for (const sn of sylNames) {
+    try { const rr = await sGet(kRosterFor(old, sn)); (rr ? JSON.parse(rr) : []).forEach(s => everyone.add(s)); } catch (_) {}
+  }
+  for (const s of everyone) {
+    await move(kPace(old, s), kPace(v, s));
+    await move(kLulls(old, s), kLulls(v, s));
+    await move(kLast(old, s), kLast(v, s));
+  }
+  await move(kLastStudent(old), kLastStudent(v));
+  const myCrew = prefGet('lastCrew:' + old);
+  if (myCrew) prefSet('lastCrew:' + v, myCrew);
   COURSES = COURSES.map(c => c === old ? v : c); await saveCourses();
   await loadCourse(v); refreshCourses(); refreshSyl(); refreshActive(); renderBoard(); renderSide();
   setSaveStatus('renamed ' + old + ' → ' + v, 'ok');
@@ -2279,7 +2367,10 @@ export async function saveSylText(text) {
 /* ---------- arrange mode, editor tools, duplicate & save changes ---------- */
 export let sylDirty = false;
 function markDirty() { sylDirty = true; markFileDirty(); notify(); }
-function clearDirty() { sylDirty = false; undoStack = []; notify(); }
+/* Both stacks. Leaving redoStack behind let a Redo pressed after a syllabus
+   change write the PREVIOUS chart's positions over the new one and save them
+   on the spot — four moved boxes on 2026 landed on Tx 2026 under test. */
+function clearDirty() { sylDirty = false; undoStack = []; redoStack = []; notify(); }
 
 export async function persistSyl() {
   if (!sylDirty && CUSTOMS[plan.sylName]) { setSaveStatus('no changes to save', 'ok'); return true; }
@@ -2491,7 +2582,15 @@ export function setFont(v) {
   markDirty(); saveLayout(); renderBoard();
 }
 export async function resetLayoutClick() {
-  if (!await uiConfirm('Reset your manual moves and return to the course-map layout for this syllabus?')) return;
+  /* Name the lines. "Manual moves" read as "the boxes I dragged", but this
+     empties the whole layout — every hand-drawn line goes with it, and once any
+     later edit saves the empty state the shipped lines stop coming back. */
+  const nLines = (layout.__lines || []).length;
+  const what = nLines
+    ? 'Reset this syllabus back to the course-map layout?\n\nThis puts every box back where the map has it AND deletes all ' + nLines + ' lines drawn on this chart.'
+    : 'Reset your manual moves and return to the course-map layout for this syllabus?';
+  if (!await uiConfirm(what)) return;
+  pushUndo();                    /* so ↶ Undo can actually take it back */
   layout = {}; await saveLayout(); renderBoard();
 }
 async function deleteEvents(ids) {
@@ -2671,6 +2770,14 @@ export async function applyCharts(charts, opts) {
     if (!SYL_ORDER.includes(target)) SYL_ORDER.push(target);
     applied.push(target);
   }
+  /* The file records the order the user put their charts in. It was written on
+     save and never read back, so opening the file elsewhere gave the shipped
+     order with the extras tacked on the end. Only on a whole-file open —
+     importing one syllabus must not reshuffle everything else. */
+  if (!o.names && Array.isArray(charts.order) && charts.order.length) {
+    const rest = SYL_ORDER.filter(n => !charts.order.includes(n));
+    SYL_ORDER = [...charts.order, ...rest];
+  }
   await sSet(kSyls(course), JSON.stringify(CUSTOMS));
   if (charts.eventInfo) {
     for (const k in charts.eventInfo) eventInfo[k] = Object.assign({}, eventInfo[k] || {}, charts.eventInfo[k]);
@@ -2698,7 +2805,15 @@ export async function applyStudents(students) {
       for (const s in (b.dates || {})) await sSet(kDatesFor(c, n, s), JSON.stringify(b.dates[s]));
     }
   }
-  if (courses.length) await sSet(kCourses, JSON.stringify(courses));
+  /* Merge, never replace. Overwriting the list dropped every course of the
+     person doing the opening: their marks stayed in storage but the course was
+     no longer in the dropdown, so there was no way back to them. Their own
+     courses stay first; the file's are appended. */
+  if (courses.length) {
+    const mine = COURSES.slice();
+    const merged = [...mine, ...courses.filter(c => !mine.includes(c))];
+    await sSet(kCourses, JSON.stringify(merged));
+  }
   await reloadFromStore();
   return { courses: courses.slice() };
 }
