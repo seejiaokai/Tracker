@@ -187,7 +187,8 @@ export default function SidePanel({ zoom }) {
                 ? opts.map((o, i) => (
                   <React.Fragment key={o.id}>
                     {i > 0 && <> <span className="mini">or</span> </>}
-                    <span className="branch">{o.id}</span>
+                    <span className={'branch' + (o.ready ? '' : ' notyet')}
+                      title={o.ready ? 'Can be flown next' : 'Not yet — earlier events have to be done first'}>{o.id}</span>
                   </React.Fragment>
                 ))
                 : <b>Complete</b>}</b>
@@ -195,7 +196,7 @@ export default function SidePanel({ zoom }) {
           );
         })}
         </div>
-        <div className="mini" style={{ marginTop: 5 }}>Two chips = the flow branches; either can be flown next.</div>
+        <div className="mini" style={{ marginTop: 5 }}>Two chips = the flow branches; either can be flown next. Faded and dashed = coming up, but something has to be done first.</div>
       </div>
       <div className="card c-plan">
         <h3>{/* One flex child, or space-between spreads the three pieces across the

@@ -1700,6 +1700,256 @@ await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
   }
 }
 
+/* ---- the eleven faults found by the 9 Aug system test ----
+   Each of these was reproduced against the shipped app before being fixed. */
+{
+  const wipe = async () => {
+    await pg.evaluate(() => localStorage.clear());
+    await pg.reload({ waitUntil: 'networkidle' });
+    await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+    await pg.waitForTimeout(700);
+  };
+  const boots = async () => {
+    try {
+      await pg.reload({ waitUntil: 'networkidle' });
+      await pg.waitForSelector('#flowSvg .ball', { timeout: 8000 });
+      return await pg.locator('#flowSvg .ball').count() > 0;
+    } catch (_) { return false; }
+  };
+
+  /* 1. A damaged file must not be able to stop the app opening. Driven through
+     the same call Open… makes, so the guard is proved where it actually sits. */
+  await wipe();
+  const bricks = [];
+  const NASTY = {
+    'crew list not a list': { students: { courses: ['26ABSG'], byCourse: { '26ABSG': { plan: {}, bySyllabus: { '2026': { roster: 'nope', marks: {}, dates: {} } } } } } },
+    'course list not a list': { students: { courses: 'AB', byCourse: {} } },
+    'an event that is a plain string': { charts: { order: ['BAD'], syllabi: { BAD: ['oops'] }, layouts: {}, eventInfo: {} } },
+    'a circular chart': { charts: { order: ['CYC'], syllabi: { CYC: [{ id: 'A', type: 'acad', seq: 0, prereqs: ['B'] }, { id: 'B', type: 'acad', seq: 1, prereqs: ['A'] }] }, layouts: {}, eventInfo: {} } },
+  };
+  for (const [what, body] of Object.entries(NASTY)) {
+    const refused = await pg.evaluate(b => {
+      const F = window.__fileFormatForTests;
+      try { F.readFile(Object.assign({ format: 'ocu-tracker', version: 1 }, b)); return false; }
+      catch (_) { return true; }
+    }, body);
+    if (!refused) bricks.push(what + ' was accepted');
+    else if (!await boots()) bricks.push(what + ' left the app unable to start');
+  }
+  ok('no damaged file can stop the app opening again', bricks.length === 0,
+    bricks.length ? bricks.join('; ') : 'all four refused, app starts every time');
+
+  /* 2. Opening someone else's file must not delete your own courses. */
+  await wipe();
+  await viaMenu('course', '#addCourse'); await pg.waitForTimeout(250);
+  await pg.fill('#dlgInput', 'MINE'); await pg.click('#dlgOk'); await pg.waitForTimeout(900);
+  const merged = await pg.evaluate(async () => {
+    await window.__coreForTests.applyStudents({ courses: ['THEIRS'], byCourse: { THEIRS: {
+      plan: { sylName: '2026' }, bySyllabus: { '2026': { roster: ['VISITOR'], marks: {}, dates: {} } } } } });
+    return [...document.querySelectorAll('#courseSel option')].map(o => o.value);
+  });
+  ok('opening a file adds its courses without deleting yours',
+    merged.includes('MINE') && merged.includes('26ABSG') && merged.includes('THEIRS'), merged.join(' | '));
+
+  /* 3. Reset layout: says what it deletes, and Undo takes it back. */
+  await wipe();
+  const AG = 'A/G - A/A 2026';
+  await pg.selectOption('#sylSel', AG); await pg.waitForTimeout(1200);
+  /* force the shipped layout into storage so there is something real to lose */
+  await pg.evaluate(s => {
+    const L = window.__coreForTests.DEFAULT_LAYOUTS[s];
+    localStorage.setItem('ocu:v3:master:lay:' + s, JSON.stringify(L));
+  }, AG);
+  await pg.reload({ waitUntil: 'networkidle' }); await pg.waitForSelector('#flowSvg .ball');
+  await pg.selectOption('#sylSel', AG).catch(() => {}); await pg.waitForTimeout(1200);
+  const linesOf = () => pg.evaluate(s => {
+    const raw = localStorage.getItem('ocu:v3:master:lay:' + s);
+    return raw ? (JSON.parse(raw).__lines || []).length : 0;
+  }, AG);
+  const linesBefore = await linesOf();
+  await pg.click('#arrangeBtn'); await pg.waitForTimeout(500);
+  await pg.click('#resetLayout'); await pg.waitForTimeout(400);
+  const resetWarning = (await pg.textContent('#dlgModal')).replace(/\s+/g, ' ');
+  ok('the Reset layout warning says the drawn lines go too',
+    /line/i.test(resetWarning) && new RegExp(String(linesBefore)).test(resetWarning),
+    resetWarning.replace('CancelOK', '').trim().slice(0, 110));
+  await pg.click('#dlgOk'); await pg.waitForTimeout(900);
+  ok('Reset layout really does clear the lines', await linesOf() === 0, `${linesBefore} -> ${await linesOf()}`);
+  await pg.click('#undoBtn'); await pg.waitForTimeout(800);
+  ok('Undo brings the lines back after a Reset layout',
+    await linesOf() === linesBefore, `${linesBefore} before, ${await linesOf()} after undo`);
+  await pg.click('#arrangeBtn').catch(() => {}); await pg.waitForTimeout(300);
+
+  /* 4. Undo/redo must not carry across a chart change. */
+  await wipe();
+  await pg.selectOption('#sylSel', '2026'); await pg.waitForTimeout(900);
+  await pg.click('#arrangeBtn'); await pg.waitForTimeout(400);
+  await pg.click('#fitBtn'); await pg.waitForTimeout(500);
+  const ballAt = id => pg.evaluate(i => {
+    const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === i);
+    const r = g.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  }, id);
+  for (const id of ['ST-01', 'ST-02', 'ACG-01']) {
+    const p = await ballAt(id);
+    await pg.mouse.move(p.x, p.y); await pg.mouse.down();
+    await pg.mouse.move(p.x + 25, p.y + 18, { steps: 5 }); await pg.mouse.up();
+    await pg.waitForTimeout(300);
+  }
+  await pg.click('#undoBtn'); await pg.waitForTimeout(500);
+  const txBoxes = () => pg.evaluate(() => {
+    const raw = localStorage.getItem('ocu:v3:master:lay:Tx 2026');
+    return raw ? Object.keys(JSON.parse(raw)).filter(k => !k.startsWith('__')).length : 0;
+  });
+  const txBefore = await txBoxes();
+  await pg.selectOption('#sylSel', 'Tx 2026'); await pg.waitForTimeout(700);
+  if (await pg.isVisible('#dlgModal')) { await pg.click('#dlgOk'); await pg.waitForTimeout(1000); }
+  await pg.click('#redoBtn').catch(() => {}); await pg.waitForTimeout(800);
+  ok('Redo after changing syllabus cannot stamp the old chart onto the new one',
+    await txBoxes() === txBefore, `Tx 2026 held ${txBefore} moved boxes, now ${await txBoxes()}`);
+  await pg.click('#arrangeBtn').catch(() => {}); await pg.waitForTimeout(300);
+
+  /* 5. Event details: the Save button, and the note that used to come back. */
+  await wipe();
+  const openDetails = async id => {
+    await pg.evaluate(i => {
+      const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === i);
+      g.scrollIntoView({ block: 'center' }); g.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    }, id);
+    await pg.waitForSelector('#pop');
+    await pg.click('#popEditInfo'); await pg.waitForSelector('#infoModal');
+  };
+  await openDetails('ST-01');
+  await pg.locator('#infoModal input').first().fill('SMOKE DETAIL EDIT');
+  await pg.locator('#infoModal button', { hasText: /save/i }).first().click();
+  await pg.waitForTimeout(600);
+  ok('changing an event\'s details lights the Save button',
+    await pg.locator('#saveChanges').count() === 1);
+
+  const txHas = (await pg.evaluate(() => [...document.querySelectorAll('#sylSel option')].map(o => o.value))).includes('Tx 2026');
+  if (txHas) {
+    await wipe();
+    await pg.selectOption('#sylSel', 'Tx 2026'); await pg.waitForTimeout(1000);
+    await openDetails('SA-5');
+    const filled = await pg.locator('#infoModal input').first().inputValue();
+    const stripped = filled.replace(/\s*\(Refer to.*?\)\s*/i, '').trim();
+    await pg.locator('#infoModal input').first().fill(stripped);
+    await pg.locator('#infoModal button', { hasText: /save/i }).first().click();
+    await pg.waitForTimeout(600);
+    await pg.reload({ waitUntil: 'networkidle' }); await pg.waitForSelector('#flowSvg .ball');
+    await pg.selectOption('#sylSel', 'Tx 2026').catch(() => {}); await pg.waitForTimeout(1000);
+    await openDetails('SA-5');
+    const back = await pg.locator('#infoModal input').first().inputValue();
+    ok('deleting a syllabus-specific note stays deleted after a reload',
+      back === stripped, `typed "${stripped}", reopened as "${back}"`);
+    await pg.click('#ifCancel').catch(() => {}); await pg.waitForTimeout(300);
+  }
+
+  /* 6. Pace and lulls: carried on rename, gone on remove. */
+  await wipe();
+  await pg.evaluate(() => {
+    const c = document.getElementById('courseSel').value;
+    localStorage.setItem('ocu:v3:' + c + ':pace:STUDENT A', JSON.stringify({ epw: '3.5', target: '2027-01-01' }));
+    localStorage.setItem('ocu:v3:' + c + ':lulls:STUDENT A', JSON.stringify([{ a: 1, b: 2 }]));
+  });
+  await pg.reload({ waitUntil: 'networkidle' }); await pg.waitForSelector('#flowSvg .ball'); await pg.waitForTimeout(700);
+  await viaMenu('course', '#renCourse'); await pg.waitForTimeout(250);
+  await pg.fill('#dlgInput', 'RENAMEDC'); await pg.click('#dlgOk'); await pg.waitForTimeout(1100);
+  const carried = await pg.evaluate(() => {
+    const c = document.getElementById('courseSel').value;
+    return { c, pace: localStorage.getItem('ocu:v3:' + c + ':pace:STUDENT A'),
+      lulls: localStorage.getItem('ocu:v3:' + c + ':lulls:STUDENT A') };
+  });
+  ok('renaming a course carries each crew member\'s pace and lull periods',
+    !!carried.pace && carried.pace.includes('3.5') && !!carried.lulls,
+    `on ${carried.c}: pace ${carried.pace}, lulls ${carried.lulls}`);
+
+  await wipe();
+  await pg.evaluate(() => {
+    const c = document.getElementById('courseSel').value;
+    localStorage.setItem('ocu:v3:' + c + ':pace:STUDENT B', JSON.stringify({ epw: '9.9' }));
+  });
+  await pg.reload({ waitUntil: 'networkidle' }); await pg.waitForSelector('#flowSvg .ball'); await pg.waitForTimeout(700);
+  await pg.selectOption('#activeSel', 'STUDENT B'); await pg.waitForTimeout(300);
+  await clickBall('ST-01'); await pg.waitForSelector('#pop');
+  await pg.locator('#pop .opts button', { hasText: 'DCO' }).click(); await pg.waitForTimeout(600);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+  await pg.evaluate(() => { document.querySelector('.chips .x[data-rm="STUDENT B"]').click(); });
+  await pg.waitForTimeout(300);
+  if (await pg.isVisible('#dlgOk')) { await pg.click('#dlgOk'); await pg.waitForTimeout(800); }
+  const leftBehind = await pg.evaluate(() => Object.keys(localStorage).filter(k => k.includes('STUDENT B')));
+  ok('removing a crew member takes their name and their work with them',
+    leftBehind.length === 0, leftBehind.join(' | ') || 'nothing left behind');
+  await pg.click('#addStu'); await pg.waitForTimeout(250);
+  await pg.fill('#dlgInput', 'STUDENT B'); await pg.click('#dlgOk'); await pg.waitForTimeout(800);
+  const revived = await pg.evaluate(() => {
+    const c = document.getElementById('courseSel').value;
+    return localStorage.getItem('ocu:v3:' + c + ':pace:STUDENT B');
+  });
+  ok('adding the same callsign back starts them clean',
+    !revived || !revived.includes('9.9'), `pace after re-adding: ${revived}`);
+
+  /* 7. The saved chart order comes back. */
+  await wipe();
+  await viaMenu('syl', '#ordSyl'); await pg.waitForSelector('#ordModal');
+  await pg.locator('#ordList .ordrow').first().locator('button[title="Move down"]').click();
+  await pg.click('#ordSave'); await pg.waitForTimeout(700);
+  const myOrder = await pg.evaluate(() => [...document.querySelectorAll('#sylSel option')].map(o => o.value));
+  /* Save the file, then RELOAD before opening it. Clearing storage in the same
+     page leaves the reordered list sitting in memory, so the check passed with
+     the fix taken out — it was reading the order it had just set, not the order
+     the file restored. The reload is what makes it a real test. */
+  const savedCharts = await pg.evaluate(async () => await window.__coreForTests.collectCharts(null));
+  await pg.evaluate(() => localStorage.clear());
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+  await pg.waitForTimeout(700);
+  const defaultOrder = await pg.evaluate(() => [...document.querySelectorAll('#sylSel option')].map(o => o.value));
+  const restoredOrder = await pg.evaluate(async c => {
+    await window.__coreForTests.applyCharts(c, { names: null, mode: 'replace', rename: null });
+    return [...document.querySelectorAll('#sylSel option')].map(o => o.value);
+  }, savedCharts);
+  ok('the reordered list really is different from the shipped one, so this check can fail',
+    JSON.stringify(defaultOrder) !== JSON.stringify(myOrder),
+    `shipped [${defaultOrder.join(', ')}] vs saved [${myOrder.join(', ')}]`);
+  ok('the chart order you saved is the order you get back',
+    JSON.stringify(restoredOrder) === JSON.stringify(myOrder),
+    `saved [${myOrder.join(', ')}] -> restored [${restoredOrder.join(', ')}]`);
+
+  /* 8. "Next event" tells the truth, and N/A carries no failure ticks. */
+  await wipe();
+  const nextHonest = await pg.evaluate(() => {
+    const ringed = new Set([...document.querySelectorAll('#flowSvg .ball')]
+      .filter(g => g.querySelector('circle.avail')).map(g => g.dataset.id));
+    return [...document.querySelectorAll('.c-next .branch')].map(e => ({
+      id: e.textContent.trim(), faded: e.classList.contains('notyet'), avail: ringed.has(e.textContent.trim()) }));
+  });
+  const lying = nextHonest.filter(c => !c.avail && !c.faded);
+  ok('"Next event" marks anything that cannot be flown yet as not yet',
+    lying.length === 0 && nextHonest.length > 0,
+    lying.length ? lying.map(c => c.id).join(', ') + ' shown as ready but not available'
+      : nextHonest.map(c => c.id + (c.faded ? ' (not yet)' : ' (ready)')).join(', '));
+
+  await clickBall('ST-02'); await pg.waitForSelector('#pop');
+  await pg.locator('#pop .fails button', { hasText: '+' }).click(); await pg.waitForTimeout(250);
+  await pg.locator('#pop .fails button', { hasText: '+' }).click(); await pg.waitForTimeout(250);
+  await pg.locator('#pop .opts button', { hasText: 'N.A.' }).click(); await pg.waitForTimeout(600);
+  const naTicks = await pg.evaluate(() => {
+    const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === 'ST-02');
+    return g.querySelectorAll('line[stroke="#ff2b2b"]').length;
+  });
+  ok('an event marked N.A. carries no failure ticks', naTicks === 0, `${naTicks} red ticks`);
+  await clickBall('ST-02'); await pg.waitForSelector('#pop');
+  await pg.locator('#pop .fails button', { hasText: '+' }).click(); await pg.waitForTimeout(400);
+  const naAdded = await pg.evaluate(() => {
+    const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === 'ST-02');
+    return { ticks: g.querySelectorAll('line[stroke="#ff2b2b"]').length,
+      shown: (document.getElementById('failCount') || {}).textContent };
+  });
+  ok('a failure cannot be added to an event marked N.A.',
+    naAdded.ticks === 0 && naAdded.shown === '2', `${naAdded.ticks} ticks, counter reads ${naAdded.shown}`);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+}
+
 /* Back to a clean slate: the checks below are about baked data, not this residue. */
 await pg.evaluate(() => localStorage.clear());
 await pg.reload({ waitUntil: 'networkidle' });
@@ -2529,6 +2779,47 @@ ok('a name containing a colon still round-trips', (() => {
   return JSON.stringify(FF.readFile(FF.buildFile({ charts: null, students: odd, savedAt: 'x' })).students)
     === JSON.stringify(odd);
 })());
+
+/* ---- a damaged file must be refused, not half-applied ----
+   Every one of these used to sail through readFile and get written to storage,
+   after which the app opened to a blank page with no buttons on EVERY load —
+   recoverable only by clearing the browser's data. The check is that it throws
+   BEFORE anything is returned; the browser checks further down prove the app
+   still starts. */
+const BAD = {
+  'a chart list that is not a list': { charts: { order: 'nope', syllabi: {} } },
+  'charts that are a string': { charts: { order: [], syllabi: 'nope' } },
+  'a chart holding a plain string instead of an event': { charts: { syllabi: { X: ['just a string'] } } },
+  'an event with no name': { charts: { syllabi: { X: [{ type: 'acad' }] } } },
+  'an event whose prerequisites are not a list': { charts: { syllabi: { X: [{ id: 'A', prereqs: 'B' }] } } },
+  'a chart that runs in a circle': { charts: { syllabi: { X: [{ id: 'A', prereqs: ['B'] }, { id: 'B', prereqs: ['A'] }] } } },
+  'an event that is its own prerequisite': { charts: { syllabi: { X: [{ id: 'A', prereqs: ['A'] }] } } },
+  'a course list that is not a list': { students: { courses: 'AB' } },
+  'a crew list that is not a list': { students: { courses: ['C'], byCourse: { C: { bySyllabus: { S: { roster: 'nope' } } } } } },
+  'marks that are not a set of marks': { students: { courses: ['C'], byCourse: { C: { bySyllabus: { S: { roster: [], marks: 'nope' } } } } } },
+};
+const leaked = [];
+for (const [what, body] of Object.entries(BAD)) {
+  let msg = null;
+  try { FF.readFile(Object.assign({ format: 'ocu-tracker', version: 1 }, body)); }
+  catch (e) { msg = e.message; }
+  if (!msg) leaked.push(what);
+  else if (!/not been opened/.test(msg)) leaked.push(what + ' (unhelpful message: ' + msg + ')');
+}
+ok('every kind of damaged file is refused, with a message saying what is wrong',
+  leaked.length === 0, leaked.length ? leaked.join('; ') : `${Object.keys(BAD).length} kinds all refused`);
+/* The guard must not become so keen it refuses real files. */
+ok('a good file is still accepted after all that',
+  (() => { try { FF.readFile(FF.buildFile({ charts: CHARTS_FIX, students: STUDENTS_FIX, savedAt: 'x' })); return true; } catch (_) { return false; } })());
+ok('a chart with no loop in it is not reported as circular',
+  FF.firstCycle([{ id: 'A', prereqs: [] }, { id: 'B', prereqs: ['A'] }, { id: 'C', prereqs: ['A', 'B'] }]) === null);
+ok('a loop is reported with the events that form it',
+  /A/.test(FF.firstCycle([{ id: 'A', prereqs: ['B'] }, { id: 'B', prereqs: ['A'] }]) || ''));
+/* A diamond (two paths rejoining) is not a loop — the naive "have I seen this
+   before" test calls it one, which would refuse perfectly good charts. */
+ok('two paths that rejoin are not mistaken for a loop',
+  FF.firstCycle([{ id: 'A', prereqs: [] }, { id: 'B', prereqs: ['A'] },
+    { id: 'C', prereqs: ['A'] }, { id: 'D', prereqs: ['B', 'C'] }]) === null);
 
 ok('a charts-only file is named plainly',
   FF.suggestedFileName({ charts: true, students: false }, '2026-08-07T15:04:05.000Z')

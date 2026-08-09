@@ -193,6 +193,9 @@ svg.perf .edgehit{pointer-events:none}
 .opt2 .o .t{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
 .opt2 .o .r{font-size:17px;font-weight:700}
 .branch{display:inline-block;background:#2a3550;border:1px solid #3a4a6a;border-radius:6px;padding:1px 7px;margin:2px 3px 0 0;font-weight:600}
+/* "Coming up" rather than "go and fly it". Faded AND dashed, so it does not
+   rely on colour alone to say the prerequisites are not done yet. */
+.branch.notyet{background:transparent;border-style:dashed;border-color:var(--grey);color:var(--muted);font-weight:500}
 .pop,.modal{position:fixed;z-index:60;background:var(--panel2);border:1px solid var(--line);border-radius:11px;box-shadow:0 12px 40px rgba(0,0,0,.6)}
 .pop{display:none;padding:9px;width:210px}.pop .t{font-size:11px;color:var(--muted);margin-bottom:7px;text-align:center}
 .pop .opts{display:grid;grid-template-columns:1fr 1fr;gap:5px}.pop button{padding:6px;font-size:12px;display:flex;align-items:center;gap:6px}
