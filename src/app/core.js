@@ -1978,7 +1978,13 @@ export async function saveInfoFor(id, vals) {
   if (!id) return;
   const t = v => (v == null ? '' : String(v)).trim();
   const o = { name: t(vals.name), fmt: t(vals.fmt), hrs: t(vals.hrs), crew: t(vals.crew), pre: t(vals.pre) };
-  const base = EVENT_INFO[id] || {}; const diff = {};
+  /* Compare against what the box was FILLED with — base plus this syllabus's own
+     profile — not the base alone. The editor pre-fills from infoFor(), so on a
+     renumbered syllabus (Tx) an untouched field differs from the global base and
+     used to be stored as a global override, pushing Tx wording onto every chart.
+     One save of SA-5 on Tx did exactly that. */
+  const base = Object.assign({}, EVENT_INFO[id] || {}, (EVENT_INFO_BY_SYL[curSyl()] || {})[id] || {});
+  const diff = {};
   Object.keys(o).forEach(k => { if (o[k] !== (base[k] || '')) diff[k] = o[k]; });
   if (Object.keys(diff).length) eventInfo[id] = diff; else delete eventInfo[id];
   await saveEventInfo(); renderBoard(); renderSide();
