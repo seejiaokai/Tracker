@@ -66,6 +66,27 @@ export default function Header() {
         <div className="sub sub-strap">Multi-student · single platform · <span id="evCount">{core.SYL.length} events</span></div>
       </div>
       <div className="controls">
+        {/* Crew leads the bar: it is the control that gets changed first every
+            session. On the phone the title block is display:none, so being the
+            first child of .controls is what puts it far left there too — no
+            separate phone rule. It stays INSIDE .controls because the header
+            checks scope to "header .controls" and a sibling would silently
+            drop out of them. */}
+        <label className="sub">Crew{' '}
+          <select id="activeSel" value={core.active || ''} onChange={e => core.setActive(e.target.value)}>
+            {core.roster.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </label>
+        <Menu id="view" label="View" title="Ways of looking at the syllabus">
+          <button className="sm" id="showAllBtn" title="Show name, crew & prerequisites for every event" onClick={core.openShowAll}>☰ Show All</button>
+          <div className="msep" />
+          <button className="sm" id="ordCrew" title="Change the order crew appear in the dropdown and on every ball" onClick={core.openOrdCrew}>⇅ Reorder crew</button>
+        </Menu>
+        {/* A real element, not margin-left:auto on the next control: with a
+            wrapping bar an auto margin applies per flex line, so the right-hand
+            group's alignment would depend on where it happened to wrap. */}
+        <span className="hspacer" />
+
         <label className="sub">Course{' '}
           <select id="courseSel" value={core.course || ''} onChange={e => core.switchCourse(e.target.value)}>
             {core.COURSES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -93,12 +114,6 @@ export default function Header() {
           <button className="sm" id="delSyl" title="Delete the current syllabus, built-in or custom. Deleted built-ins can be restored from Reorder." onClick={core.delSyl}>🗑 Delete syllabus</button>
         </Menu>
 
-        <label className="sub">Marking as{' '}
-          <select id="activeSel" value={core.active || ''} onChange={e => core.setActive(e.target.value)}>
-            {core.roster.map(r => <option key={r} value={r}>{r}</option>)}
-          </select>
-        </label>
-
         <Menu id="file" label="File" title="Open your file, bring a syllabus in, or hand a copy over">
           <button className="sm" id="openFileBtn" title="Open your syllabus file, or start a new one" onClick={core.openFileClick}>📁 Open…</button>
           <button className="sm" id="importSylBtn" title="Bring one syllabus in from another file, keeping everything you already have" onClick={core.importSyllabusClick}>⊕ Import syllabus…</button>
@@ -111,12 +126,6 @@ export default function Header() {
           </div>
           <label className="sub"><input type="checkbox" id="optCharts" checked={core.saveOpts.charts} onChange={e => core.setSaveOpt('charts', e.target.checked)} /> Charts</label>
           <label className="sub"><input type="checkbox" id="optStudents" checked={core.saveOpts.students} onChange={e => core.setSaveOpt('students', e.target.checked)} /> Students &amp; courses</label>
-        </Menu>
-
-        <Menu id="view" label="View" title="Ways of looking at the syllabus">
-          <button className="sm" id="showAllBtn" title="Show name, crew & prerequisites for every event" onClick={core.openShowAll}>☰ Show All</button>
-          <div className="msep" />
-          <button className="sm" id="ordCrew" title="Change the order crew appear in the dropdown and on every ball" onClick={core.openOrdCrew}>⇅ Reorder crew</button>
         </Menu>
 
         <button className={'sm' + (core.arrangeMode ? ' primary' : '')} id="arrangeBtn" onClick={core.toggleArrange}>{core.arrangeMode ? '✓ Done' : '✎ Edit'}</button>

@@ -22,7 +22,12 @@ body{margin:0;background:var(--bg);color:var(--ink);font:13.5px/1.45 "Segoe UI",
 header{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 header h1{font-size:16px;margin:0;letter-spacing:.5px}
 .sub{color:var(--muted);font-size:12px}
-.controls{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+/* The bar now starts with Crew and ends with the save slot, with .hspacer
+   holding the two groups apart. margin-left:auto moved onto the spacer, so the
+   left group can sit next to the title instead of the whole bar being pushed
+   right. */
+.controls{margin-left:14px;flex:1 1 auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.hspacer{flex:1 1 auto;min-width:0}
 select,button,input{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:6px 9px;font-size:12.5px}
 button{cursor:pointer}button:hover{border-color:var(--accent)}
 button.primary{background:#16384a;border-color:var(--accent)}
@@ -351,7 +356,9 @@ small.hint{color:var(--muted);font-size:11px}
  header{padding:5px 8px;gap:8px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
  header::-webkit-scrollbar{display:none}
  header>div:first-child{display:none}
- .controls{flex-wrap:nowrap;margin-left:0}
+ .controls{flex:0 0 auto;flex-wrap:nowrap;margin-left:0}
+ /* Collapses .hspacer to nothing as well, so the one scrolling row stays
+    packed and Crew sits hard against the left edge. */
  .controls>*{flex:0 0 auto}
  .saveslot{min-width:0}
  .legend{display:none}

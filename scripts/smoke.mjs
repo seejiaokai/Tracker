@@ -724,6 +724,26 @@ const barRows = await pg.evaluate(() => {
 ok('the top bar fits on one row at 1440', barRows.h <= barRows.tallest + 4,
   `${barRows.h}px tall, tallest control ${barRows.tallest}px, ${barRows.n} groups`);
 
+/* ---- Crew leads the bar ----
+   It is the control that gets changed first every session and it used to sit
+   fifth, wedged between the Syllabus and File menus. */
+const crewFirst = await pg.evaluate(() => {
+  const vis = [...document.querySelectorAll('header .controls select, header .controls button')]
+    .filter(e => e.getBoundingClientRect().width > 0);
+  const ids = vis.map(e => e.id);
+  const r = id => document.getElementById(id).getBoundingClientRect();
+  return { ids, first: ids[0], crewLeft: Math.round(r('activeSel').left),
+    courseLeft: Math.round(r('courseSel').left),
+    words: document.querySelector('header .controls').textContent };
+});
+ok('Crew is the first control in the bar and sits left of Course',
+  crewFirst.first === 'activeSel' && crewFirst.crewLeft < crewFirst.courseLeft,
+  `${crewFirst.ids.slice(0, 4).join(' → ')} (crew ${crewFirst.crewLeft}px, course ${crewFirst.courseLeft}px)`);
+ok('the picker is labelled Crew, not Marking as',
+  crewFirst.words.includes('Crew') && !crewFirst.words.includes('Marking as'));
+ok('View sits right after Crew',
+  crewFirst.ids.indexOf('viewMenuBtn') === 1, crewFirst.ids.slice(0, 3).join(' → '));
+
 /* Grouping must hide nothing: every action still has to be reachable. Named by
    id, with the menu that now holds it. */
 const MENUS = {
@@ -878,6 +898,23 @@ ok('on a phone the chart fits the screen width, so it only scrolls up and down',
   `${phoneFlow.scrollW}px of chart in ${phoneFlow.clientW}px of screen`);
 ok('a phone can scroll well past the end of the chart, clear of the zoom control',
   phoneFlow.roomBelow >= 130, `${phoneFlow.roomBelow}px of padding under the chart`);
+
+/* The phone bar is one row that scrolls sideways, so "first" means reachable
+   without scrolling it. Measured against the header's own left padding rather
+   than against zero, which any control would beat. */
+const phoneCrew = await pg.evaluate(() => {
+  const h = document.querySelector('header');
+  h.scrollLeft = 0;
+  const pad = parseFloat(getComputedStyle(h).paddingLeft) || 0;
+  const hr = h.getBoundingClientRect(), cr = document.getElementById('activeSel').getBoundingClientRect();
+  const label = document.getElementById('activeSel').closest('label').getBoundingClientRect();
+  return { gap: Math.round(label.left - (hr.left + pad)), inView: cr.right <= hr.right,
+    course: Math.round(document.getElementById('courseSel').getBoundingClientRect().left),
+    crew: Math.round(cr.left) };
+});
+ok('on a phone Crew is the leftmost control, reachable without scrolling the bar',
+  phoneCrew.gap <= 2 && phoneCrew.inView && phoneCrew.crew < phoneCrew.course,
+  `${phoneCrew.gap}px from the header's left padding, crew ${phoneCrew.crew}px vs course ${phoneCrew.course}px`);
 
 /* THE MENUS MUST WORK ON A PHONE. They did not: the phone header scrolls
    sideways, and an overflow container clips its own absolutely positioned
