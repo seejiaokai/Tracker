@@ -660,6 +660,52 @@ await pg.waitForSelector('#flowSvg .ball');
 await pg.selectOption('#sylSel', await pg.evaluate(() =>
   [...document.querySelectorAll('#sylSel option')].find(o => o.textContent.startsWith('2026')).value));
 await pg.waitForTimeout(800);
+/* The A/G - A/A chart mirrors the course map with one long drawn wire (NN) and
+   shared bus rails. Two rendering faults are invisible in the data and only
+   show on screen, so check the drawn paths themselves (found 9 Aug by agents
+   auditing the rendered bands). A fresh browser context, because the fault was
+   precisely that a FIRST visit — no saved chart, baked defaults only — lost
+   the kept-hop list and severed the rails:
+   - an arrow crossing the drawn NN wire must keep its hop arc, or the crossing
+     reads as a junction;
+   - a bus rail must NOT hop over its own risers, or half the bus looks
+     disconnected. */
+{
+  const ctx2 = await b.newContext();
+  const pg2 = await ctx2.newPage();
+  await pg2.goto(URL, { waitUntil: 'networkidle' });
+  await pg2.waitForSelector('#flowSvg .ball');
+  const agVal2 = await pg2.evaluate(() =>
+    [...document.querySelectorAll('#sylSel option')].find(o => o.textContent.trim().startsWith('A/G - A/A 2026'))?.value);
+  if (agVal2 != null) {
+    await pg2.selectOption('#sylSel', agVal2); await pg2.waitForTimeout(900);
+    const hops = await pg2.evaluate(() => {
+      const ds = [...document.querySelectorAll('#flowSvg path')].map(p => p.getAttribute('d') || '');
+      const at = pre => ds.find(d => d.startsWith(pre)) || '';
+      return {
+        overNN: at('M450.0 9523.0'),   /* SA(S)-7 -> SA-5, crosses the NN wire  */
+        /* AVI-06 -> AVI-10: same start as AVI-06 -> IAT-02, so pin the far end too */
+        rail: ds.find(d => d.startsWith('M237.0 1648.0') && d.endsWith('L460.0 1727.0')) || '',
+      };
+    });
+    ok('crossings over the drawn NN wire keep their hop',
+      hops.overNN.includes('A5 5'), hops.overNN.slice(0, 90) || 'path not found');
+    ok('a bus rail is not severed by hops over its own risers',
+      hops.rail !== '' && !hops.rail.includes('A5 5'), hops.rail.slice(0, 90) || 'path not found');
+    /* the wide ST-10 labels ship with a smaller per-ball font; a fresh visit
+       must adopt it or the ring clips the name (same loader gap as the hops) */
+    const fs10 = await pg2.evaluate(() => {
+      const t = document.querySelector('#flowSvg g.ball[data-id="ST-10 ACM"] text');
+      return t ? t.getAttribute('style') : 'ball not found';
+    });
+    ok('shipped per-ball font sizes reach a fresh visitor', /font-size:\s*7px/.test(fs10), fs10);
+  } else {
+    ok('crossings over the drawn NN wire keep their hop', false, 'A/G - A/A 2026 missing from #sylSel');
+    ok('a bus rail is not severed by hops over its own risers', false, 'A/G - A/A 2026 missing from #sylSel');
+  }
+  await ctx2.close();
+}
+
 await pg.setViewportSize({ width: 390, height: 844 });
 await pg.waitForTimeout(900);
 

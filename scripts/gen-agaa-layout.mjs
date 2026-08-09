@@ -147,6 +147,9 @@ em('AAS-04', 'T-10', { fromSide: 'S', toSide: 'W', mid: { x: 380, y: 4420 } });
 em('TR-4', 'DAAR', { fromSide: 'W', toSide: 'N' });
 em('AAS-04', 'DAAR', { fromSide: 'W', toSide: 'N' });
 em('INT(S)-2', 'DAAR', { fromSide: 'W', toSide: 'N' });
+/* T-10 sits just above INT(S)-4 and to its right; without sides the default
+   elbow lands arrowless on the ball's shoulder (agent-audit find, 9 Aug) */
+em('T-10', 'INT(S)-4', { fromSide: 'W', toSide: 'E' });
 
 /* ---------------- B-27 : LASDT, AGR/AGD/AGS ladder, SA(S)-1 ---------------- */
 put('JMP-03', 390, 5926); put('AAM-09', 573, 5926); put('AGR-01', 757, 5926);
@@ -321,6 +324,18 @@ const UNMERGES = [
   K('TI(S)-3', 'TI-2'),
   K('DCA(S)-1', 'DCA-1'),
 ].map(k => mkey(LK + NN.id, k));
+/* The two-target buses route every edge along one shared rail, but a straight
+ * riser that happens to sit under a parent spans the rail, so sibling edges
+ * hop it and the rail reads as cut (agent-audit find, 9 Aug). These crossings
+ * ARE the rail: merge them so the bus stays one unbroken line. */
+const MERGES = [
+  [K('AVI-06', 'AVI-10'), K('AVI-07', 'IAT-02')],
+  [K('AVI-09', 'IAT-02'), K('AVI-08', 'AVI-10')],
+  [K('ST-03', 'AVI-04'), K('AVI-01', 'AVI-03')],
+].map(([a, b]) => mkey(a, b));
+/* These two ids are wider than any other ball label; every other chart keeps
+ * the default size, so shrink just these (same idea as AVI-12 in 2026). */
+const FONT = { 'ST-10 ACM': 7, 'ST-10 LASDT': 6 };
 
 /* ================= validation ================= */
 const ids = new Set(syl.map(e => e.id));
@@ -334,6 +349,10 @@ const edgeSet = new Set();
 syl.forEach(e => (e.prereqs || []).forEach(p => edgeSet.add(K(p, e.id))));
 const badMeta = Object.keys(EM).filter(k => !edgeSet.has(k));
 if (badMeta.length) throw new Error('edgeMeta for non-edges: ' + badMeta.join(', '));
+const badMerge = MERGES.flatMap(k => k.split('|')).filter(k => !edgeSet.has(k));
+if (badMerge.length) throw new Error('merge names a non-edge: ' + badMerge.join(', '));
+const badFont = Object.keys(FONT).filter(id => !ids.has(id));
+if (badFont.length) throw new Error('font override for unknown event: ' + badFont.join(', '));
 if (!edgeSet.has(K('SA-4', 'NTR-1'))) throw new Error('NN line covers a link that does not exist');
 
 let clashes = [];
@@ -355,7 +374,8 @@ const all = JSON.parse(m[1].replace(/;\s*$/, ''));
 const out = {};
 for (const id of laidOut) out[id] = N[id];
 out.__edgeMeta = EM;
-out.__merges = [];
+out.__merges = MERGES;
+out.__font = FONT;
 out.__unmerges = UNMERGES;
 out.__lines = [NN];
 out.__derived = [];
