@@ -336,6 +336,27 @@ ok('the page is a secure context, which the file pickers require', fsCaps.secure
   ok('a word that is no code still searches the whole row',
     EO.filterEvents(evs, 'briefing', txt).length === evs.length);
   ok('an empty filter keeps everything', EO.filterEvents(evs, '   ', txt).length === evs.length);
+
+  /* Jump-to-event matching. Labels are the whole point: seven balls print
+     something other than their id, so anyone searching for what they can see
+     on the chart is typing a label, and id-only matching misses them. */
+  const fe = [
+    { id: 'ST-01' }, { id: 'ST-10' }, { id: 'AVI-12', label: 'AVI-12A/B' },
+    { id: 'NAAR', label: 'NAAR-1' }, { id: 'IEPE/IPC', label: 'IEPE' },
+  ];
+  const ids = q => EO.findEvents(fe, q).map(e => e.id).join(',');
+  ok('an exact code wins outright', ids('ST-01') === 'ST-01', ids('ST-01'));
+  ok('the words printed on a ball are searchable, not just its code',
+    ids('AVI-12A/B') === 'AVI-12' && ids('NAAR-1') === 'NAAR' && ids('IEPE') === 'IEPE/IPC',
+    `${ids('AVI-12A/B')} | ${ids('NAAR-1')} | ${ids('IEPE')}`);
+  ok('a code that starts several returns all of them, first one first',
+    ids('ST') === 'ST-01,ST-10', ids('ST'));
+  /* "AVI-12" is BOTH an exact id and a label prefix — the exact id has to win,
+     or typing a full code would offer two answers and jump to neither. */
+  ok('an exact code beats a label that merely starts with it',
+    ids('AVI-12') === 'AVI-12', ids('AVI-12'));
+  ok('nothing matching returns nothing', EO.findEvents(fe, 'ZZZZ').length === 0);
+  ok('an empty search finds nothing rather than everything', EO.findEvents(fe, '  ').length === 0);
 }
 
 const FFNAME = await import('../src/app/fileFormat.js');
@@ -724,13 +745,159 @@ const barRows = await pg.evaluate(() => {
 ok('the top bar fits on one row at 1440', barRows.h <= barRows.tallest + 4,
   `${barRows.h}px tall, tallest control ${barRows.tallest}px, ${barRows.n} groups`);
 
+/* The check above measures .controls alone, so it stayed green while the HEADER
+   wrapped the title onto its own row and took 44px of chart with it — which is
+   exactly what adding the search box did. Measure the whole header. */
+const hdrH = await pg.evaluate(() => Math.round(document.querySelector('header').getBoundingClientRect().height));
+ok('the whole header stays one row at 1440, title included',
+  hdrH <= barRows.tallest + 24, `header ${hdrH}px, tallest control ${barRows.tallest}px`);
+
+/* ---- Crew leads the bar ----
+   It is the control that gets changed first every session and it used to sit
+   fifth, wedged between the Syllabus and File menus. */
+const crewFirst = await pg.evaluate(() => {
+  const vis = [...document.querySelectorAll('header .controls select, header .controls button')]
+    .filter(e => e.getBoundingClientRect().width > 0);
+  const ids = vis.map(e => e.id);
+  const r = id => document.getElementById(id).getBoundingClientRect();
+  return { ids, first: ids[0], crewLeft: Math.round(r('activeSel').left),
+    courseLeft: Math.round(r('courseSel').left),
+    words: document.querySelector('header .controls').textContent };
+});
+ok('Crew is the first control in the bar and sits left of Course',
+  crewFirst.first === 'activeSel' && crewFirst.crewLeft < crewFirst.courseLeft,
+  `${crewFirst.ids.slice(0, 4).join(' → ')} (crew ${crewFirst.crewLeft}px, course ${crewFirst.courseLeft}px)`);
+ok('the picker is labelled Crew, not Marking as',
+  crewFirst.words.includes('Crew') && !crewFirst.words.includes('Marking as'));
+ok('View sits right after Crew',
+  crewFirst.ids.indexOf('viewMenuBtn') === 1, crewFirst.ids.slice(0, 3).join(' → '));
+
+/* ---- finding one ball on a 210-event chart ---- */
+{
+  /* Reload first. Switching syllabus with flow edits outstanding raises the
+     discard prompt, which swallowed the switch AND left the app dirty for the
+     Save-changes checks further down. A reload starts clean and costs a second.
+     Then pin the tallest chart on offer: earlier checks leave a five-event
+     import selected, and nothing can scroll on a chart shorter than the screen
+     — the first version of this "passed" with the board at 0 throughout and
+     the target already on screen. */
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForSelector('#flowSvg .ball');
+  {
+    const opts = await pg.evaluate(() => [...document.querySelectorAll('#sylSel option')].map(o => o.value));
+    let best = null, bestN = -1;
+    for (const o of opts) {
+      await pg.selectOption('#sylSel', o); await pg.waitForTimeout(400);
+      const n = await pg.locator('#flowSvg .ball').count();
+      if (n > bestN) { bestN = n; best = o; }
+    }
+    await pg.selectOption('#sylSel', best); await pg.waitForTimeout(800);
+  }
+  /* Park at the BOTTOM and search for a ball at the top, so the jump has to
+     travel. Reading a scroll position twice without moving in between is how
+     several checks here once measured nothing. */
+  const target = await pg.evaluate(() => {
+    const bd = document.getElementById('board');
+    bd.scrollTop = bd.scrollHeight; bd.scrollLeft = 0;
+    const balls = [...document.querySelectorAll('#flowSvg .ball')];
+    const top = balls.map(g => ({ id: g.dataset.id, y: g.getBoundingClientRect().top }))
+      .sort((a, c) => a.y - c.y)[0];
+    return { id: top.id, top: Math.round(bd.scrollTop),
+      scrollable: bd.scrollHeight > bd.clientHeight * 2 };
+  });
+  ok('the search checks run against a chart taller than the screen',
+    target.scrollable && target.top > 200, `parked at ${target.top}px`);
+  await pg.fill('#hSearch', target.id);
+  await pg.waitForTimeout(600);
+  const found = await pg.evaluate(id => {
+    const bd = document.getElementById('board');
+    const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === id);
+    const r = g.getBoundingClientRect(), b = bd.getBoundingClientRect();
+    const ring = g.querySelector('circle.found');
+    const av = g.querySelector('circle.avail');
+    const num = n => parseFloat(n);
+    return {
+      scrollTop: Math.round(bd.scrollTop),
+      inView: r.top >= b.top - 2 && r.bottom <= b.bottom + 2,
+      rings: document.querySelectorAll('#flowSvg circle.found').length,
+      onTarget: !!ring,
+      rFound: ring ? num(ring.getAttribute('r')) : null,
+      wFound: ring ? num(ring.getAttribute('stroke-width')) : null,
+      rAvail: av ? num(av.getAttribute('r')) : null,
+      wAvail: av ? num(av.getAttribute('stroke-width')) : null,
+      stroke: ring ? ring.getAttribute('stroke') : null,
+    };
+  }, target.id);
+  ok('typing an event code snaps the board to that ball',
+    found.inView && Math.abs(found.scrollTop - target.top) > 200,
+    `${target.id}: scroll ${target.top} -> ${found.scrollTop}, in view ${found.inView}`);
+  ok('exactly one ball is ringed, and it is the one searched for',
+    found.rings === 1 && found.onTarget, `${found.rings} rings`);
+
+  /* Stated as a property of the two radii, not as fixed numbers: this stays
+     true if either ring is restyled, and goes false the moment they touch. */
+  const gap = await pg.evaluate(() => {
+    const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.querySelector('circle.found') && x.querySelector('circle.avail'));
+    if (!g) return null;
+    const f = g.querySelector('circle.found'), a = g.querySelector('circle.avail');
+    const n = (el, at) => parseFloat(el.getAttribute(at));
+    return Math.round(((n(f, 'r') - n(f, 'stroke-width') / 2) - (n(a, 'r') + n(a, 'stroke-width') / 2)) * 100) / 100;
+  });
+  if (gap == null) {
+    /* Force the two onto one ball rather than skipping: an "available" ball is
+       whichever the active student can fly next, which varies by run. */
+    const both = await pg.evaluate(() => {
+      const g = document.querySelector('#flowSvg .ball circle.avail');
+      return g ? g.closest('.ball').dataset.id : null;
+    });
+    if (both) { await pg.fill('#hSearch', both); await pg.waitForTimeout(500); }
+    const gap2 = await pg.evaluate(() => {
+      const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.querySelector('circle.found') && x.querySelector('circle.avail'));
+      if (!g) return null;
+      const f = g.querySelector('circle.found'), a = g.querySelector('circle.avail');
+      const n = (el, at) => parseFloat(el.getAttribute(at));
+      return Math.round(((n(f, 'r') - n(f, 'stroke-width') / 2) - (n(a, 'r') + n(a, 'stroke-width') / 2)) * 100) / 100;
+    });
+    ok('the search ring never touches the yellow available ring', gap2 != null && gap2 > 0.5, `${gap2}px between them`);
+  } else {
+    ok('the search ring never touches the yellow available ring', gap > 0.5, `${gap}px between them`);
+  }
+  /* Both halves: "not the accent blue" alone is true of a ring that does not
+     exist, which is exactly how a missing feature reads. */
+  ok('the search ring is a colour of its own, not the blue that means "selected"',
+    !!found.stroke && found.stroke.toLowerCase() !== '#36c2ff', String(found.stroke));
+
+  /* A search that finds nothing must not move the board or drop the mark. */
+  const before = await pg.evaluate(() => Math.round(document.getElementById('board').scrollTop));
+  await pg.fill('#hSearch', 'ZZZZ'); await pg.waitForTimeout(500);
+  const miss = await pg.evaluate(() => ({
+    scrollTop: Math.round(document.getElementById('board').scrollTop),
+    rings: document.querySelectorAll('#flowSvg circle.found').length,
+    stat: (document.getElementById('hSearchStat') || {}).textContent,
+  }));
+  ok('a search that finds nothing leaves the board and the mark alone',
+    miss.scrollTop === before && miss.rings === 1 && /no match/.test(miss.stat || ''),
+    `scroll ${before} -> ${miss.scrollTop}, ${miss.rings} rings, "${miss.stat}"`);
+
+  await pg.click('#hSearchClear'); await pg.waitForTimeout(400);
+  ok('clearing the box takes the ring off',
+    await pg.evaluate(() => document.querySelectorAll('#flowSvg circle.found').length) === 0);
+
+  /* Hand the bar back clean. Switching syllabus writes the plan, which marks
+     the file unsaved, and the Save-changes checks below are about a bar with
+     nothing to save. */
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForSelector('#flowSvg .ball');
+  await pg.waitForTimeout(300);
+}
+
 /* Grouping must hide nothing: every action still has to be reachable. Named by
    id, with the menu that now holds it. */
 const MENUS = {
-  '#courseMenuBtn': ['#addCourse', '#renCourse', '#delCourse'],
+  '#courseMenuBtn': ['#addCourse', '#renCourse', '#ordCourse', '#delCourse'],
   '#sylMenuBtn': ['#dupSyl', '#addSyl', '#renSyl', '#ordSyl', '#delSyl'],
   '#fileMenuBtn': ['#openFileBtn', '#importSylBtn', '#saveCopyBtn', '#optCharts', '#optStudents'],
-  '#viewMenuBtn': ['#showAllBtn'],
+  '#viewMenuBtn': ['#showAllBtn', '#ordCrew'],
 };
 const unreachable = [];
 for (const [btn, items] of Object.entries(MENUS)) {
@@ -878,6 +1045,49 @@ ok('on a phone the chart fits the screen width, so it only scrolls up and down',
   `${phoneFlow.scrollW}px of chart in ${phoneFlow.clientW}px of screen`);
 ok('a phone can scroll well past the end of the chart, clear of the zoom control',
   phoneFlow.roomBelow >= 130, `${phoneFlow.roomBelow}px of padding under the chart`);
+
+/* The phone bar is one row that scrolls sideways, so "first" means reachable
+   without scrolling it. Measured against the header's own left padding rather
+   than against zero, which any control would beat. */
+const phoneCrew = await pg.evaluate(() => {
+  const h = document.querySelector('header');
+  h.scrollLeft = 0;
+  const pad = parseFloat(getComputedStyle(h).paddingLeft) || 0;
+  const hr = h.getBoundingClientRect(), cr = document.getElementById('activeSel').getBoundingClientRect();
+  const label = document.getElementById('activeSel').closest('label').getBoundingClientRect();
+  return { gap: Math.round(label.left - (hr.left + pad)), inView: cr.right <= hr.right,
+    course: Math.round(document.getElementById('courseSel').getBoundingClientRect().left),
+    crew: Math.round(cr.left) };
+});
+ok('on a phone Crew is the leftmost control, reachable without scrolling the bar',
+  phoneCrew.gap <= 2 && phoneCrew.inView && phoneCrew.crew < phoneCrew.course,
+  `${phoneCrew.gap}px from the header's left padding, crew ${phoneCrew.crew}px vs course ${phoneCrew.course}px`);
+
+/* The search box on a phone. A 132px input in a 390px row would leave nothing
+   for anything else, so it hides behind 🔍 and opens full width underneath.
+   Hit-tested, not just measured: the menu panels looked perfectly fine by
+   display and box size while every tap landed on the view tabs beneath. */
+{
+  const shut = await pg.evaluate(() => ({
+    inline: Math.round(document.getElementById('hSearch').getBoundingClientRect().width),
+    btn: Math.round(document.getElementById('hSearchBtn').getBoundingClientRect().width),
+  }));
+  ok('on a phone the search box is behind a button, not sitting in the bar',
+    shut.inline === 0 && shut.btn > 0, `input ${shut.inline}px, button ${shut.btn}px`);
+  await pg.click('#hSearchBtn'); await pg.waitForTimeout(400);
+  const open = await pg.evaluate(() => {
+    const i = document.getElementById('hSearch');
+    const r = i.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    const hdr = document.querySelector('header').getBoundingClientRect();
+    return { w: Math.round(r.width), vw: innerWidth, below: r.top >= hdr.bottom - 1,
+      hit: hit ? (hit.id || hit.tagName) : 'none' };
+  });
+  ok('tapping the magnifier opens a box that fills the width and can be typed in',
+    open.w >= open.vw * 0.7 && open.below && open.hit === 'hSearch',
+    `${open.w}px of ${open.vw}px, below the bar ${open.below}, tap hits ${open.hit}`);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+}
 
 /* THE MENUS MUST WORK ON A PHONE. They did not: the phone header scrolls
    sideways, and an overflow container clips its own absolutely positioned
@@ -1295,10 +1505,13 @@ if (two.length >= 2) {
     `scrolled to ${away}px, switching back moved to ${back.scrollTop}px`);
 }
 
-/* A recorded syllabus that has since been deleted must not break the load. */
+/* A recorded syllabus that has since been deleted must not break the load.
+   The "ocu:" prefix is not decoration: sync/local.js only ever reads keys that
+   carry it, so this check spent its whole life planting a key the app never
+   looked at and asserting that nothing broke — which nothing would have. */
 ok('a remembered syllabus that no longer exists does not break opening the app',
   await pg.evaluate(async () => {
-    localStorage.setItem('v3:' + document.getElementById('courseSel').value + ':lastStudent', 'NO SUCH PERSON');
+    localStorage.setItem('ocu:v3:' + document.getElementById('courseSel').value + ':lastStudent', 'NO SUCH PERSON');
     return true;
   }));
 await pg.reload({ waitUntil: 'networkidle' });
@@ -1313,6 +1526,148 @@ ok('the app still opens with a remembered student who is gone',
    the same ball must show different words after a syllabus switch. */
 /* run from a clean slate — earlier checks leave custom courses and remembered
    positions behind, and this check is about the BAKED data, not that residue */
+await pg.evaluate(() => localStorage.clear());
+await pg.reload({ waitUntil: 'networkidle' });
+await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+
+/* ---- course order, and the crew order that slices every ball ----
+   Runs straight after the clean slate above so the course list is exactly the
+   one shipped default and the expected orders can be stated outright rather
+   than compared against "whatever was there before". */
+{
+  const courses = () => pg.evaluate(() => [...document.querySelectorAll('#courseSel option')].map(o => o.value));
+  /* Expectations are written out in full rather than derived from what the app
+     just did. Deriving them is how a reorder check ends up comparing broken
+     output against itself and reporting "wanted SMOKE FIRST | SMOKE FIRST". */
+  const base = await courses();
+  ok('these checks start from the single shipped course',
+    JSON.stringify(base) === JSON.stringify(['26ABSG']), base.join(' | '));
+  await viaMenu('course', '#addCourse'); await pg.waitForTimeout(250);
+  await pg.fill('#dlgInput', 'SMOKE FIRST'); await pg.click('#dlgOk'); await pg.waitForTimeout(900);
+  const withNew = await courses();
+  /* Named position, not "is present": push put it last, and a check that only
+     asked whether it existed would have passed against the old code. */
+  ok('a new course is added at the TOP of the list',
+    JSON.stringify(withNew) === JSON.stringify(['SMOKE FIRST', '26ABSG']), withNew.join(' | '));
+
+  /* Reorder it back down and state the whole expected array. */
+  await viaMenu('course', '#ordCourse'); await pg.waitForSelector('#ordModal');
+  ok('the reorder modal knows which list it is showing',
+    await pg.getAttribute('#ordModal', 'data-ord') === 'course'
+    && (await pg.textContent('#ordTitle')) === 'Course order');
+  await pg.locator('#ordList .ordrow').first().locator('button[title="Move down"]').click();
+  await pg.click('#ordSave'); await pg.waitForTimeout(700);
+  const moved = await courses();
+  ok('moving a course down reorders the Course dropdown',
+    JSON.stringify(moved) === JSON.stringify(['26ABSG', 'SMOKE FIRST']), moved.join(' | '));
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+  const kept = await courses();
+  ok('the course order survives a reload',
+    JSON.stringify(kept) === JSON.stringify(['26ABSG', 'SMOKE FIRST']), kept.join(' | '));
+
+  /* Crew order. Named course, not "whichever ended up first": the roster lives
+     per course, and picking the reordered one landed this block on the empty
+     new course, where it silently reported a missing roster instead of the
+     thing it was meant to measure.
+     Grade somebody FIRST too: on an ungraded ball every wedge is the same
+     white, so a fill comparison would pass without renderBoard ever being
+     called — the "grading an empty roster is a no-op" trap in another costume. */
+  await pg.selectOption('#courseSel', '26ABSG'); await pg.waitForTimeout(800);
+  const crew = () => pg.evaluate(() => [...document.querySelectorAll('#activeSel option')].map(o => o.value));
+  const roster0 = await crew();
+  if (roster0.length >= 2) {
+    await pg.selectOption('#activeSel', roster0[0]); await pg.waitForTimeout(300);
+    await clickBall('ST-01'); await pg.waitForSelector('#pop');
+    await pg.locator('#pop .opts button', { hasText: 'DCO' }).click();
+    await pg.waitForTimeout(700);
+    await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+    const firstFill = () => pg.evaluate(() => {
+      const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === 'ST-01');
+      const p = g && g.querySelector('path');
+      return p ? p.getAttribute('fill') : null;
+    });
+    const fillBefore = await firstFill();
+    await viaMenu('view', '#ordCrew'); await pg.waitForSelector('#ordModal');
+    ok('the crew list opens in the same modal',
+      await pg.getAttribute('#ordModal', 'data-ord') === 'crew');
+    await pg.locator('#ordList .ordrow').first().locator('button[title="Move down"]').click();
+    await pg.click('#ordSave'); await pg.waitForTimeout(700);
+    const wantCrew = [roster0[1], roster0[0], ...roster0.slice(2)];
+    const gotCrew = await crew();
+    ok('reordering crew reorders the Crew dropdown',
+      JSON.stringify(gotCrew) === JSON.stringify(wantCrew), gotCrew.join(' | '));
+    const fillAfter = await firstFill();
+    /* The slices are cut by roster index, so the board has to be redrawn too —
+       without renderBoard the key re-orders and the balls do not. */
+    ok('reordering crew also re-slices the balls',
+      !!fillBefore && fillBefore !== fillAfter, `first slice ${fillBefore} -> ${fillAfter}`);
+    await pg.reload({ waitUntil: 'networkidle' });
+    await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+    ok('the crew order survives a reload',
+      JSON.stringify(await crew()) === JSON.stringify(wantCrew), (await crew()).join(' | '));
+  } else {
+    /* Not a soft skip: an empty roster here means the block measured nothing. */
+    ok('the crew reorder checks have a roster to work with', false, `roster: ${roster0.join(',')}`);
+  }
+}
+
+/* ---- the app reopens where YOU left it, and tells nobody else ----
+   It always opened on COURSES[0] before, so a second course could never be the
+   one that greeted you. Runs on from the two-course state above. */
+{
+  await pg.selectOption('#courseSel', 'SMOKE FIRST'); await pg.waitForTimeout(800);
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+  ok('the app reopens on the course you were last on',
+    await pg.inputValue('#courseSel') === 'SMOKE FIRST', await pg.inputValue('#courseSel'));
+
+  /* Both halves matter. The negative alone passes when nothing is stored at
+     all, which is exactly how a feature that never wrote anything would look. */
+  const where = await pg.evaluate(() => ({
+    mine: localStorage.getItem('ocuLocal:lastCourse'),
+    shared: Object.keys(localStorage).filter(k => k.startsWith('ocu:') && /lastCourse/i.test(k)),
+  }));
+  ok('that memory is this browser\'s alone, not in the shared file',
+    where.mine === 'SMOKE FIRST' && where.shared.length === 0,
+    `mine=${where.mine}, shared=[${where.shared.join(',')}]`);
+
+  /* Remembering a course that has since gone must not strand the app. */
+  await pg.evaluate(() => localStorage.setItem('ocuLocal:lastCourse', 'NO SUCH COURSE'));
+  const errsBefore = errs.length;
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+  /* Read the HEADING, not the dropdown. A <select> whose value names no option
+     silently reports its first one instead, so #courseSel says "26ABSG" even
+     when the app has actually loaded a course that does not exist — the check
+     passed against a build with the membership test removed. #courseTitle is
+     rendered straight from the loaded course, so it cannot lie. */
+  const fellBack = await pg.textContent('#courseTitle');
+  ok('a remembered course that no longer exists falls back cleanly',
+    fellBack === '26ABSG PROGRESS TRACKER'
+    && await pg.locator('#flowSvg .ball').count() > 0 && errs.length === errsBefore,
+    `${fellBack}, ${errs.length - errsBefore} new page errors`);
+
+  /* Selecting a crew member has to count on its own. Only grading did before,
+     so choosing someone and coming back tomorrow forgot them. Pick the person
+     who is NOT the one graded above, or the check passes either way. */
+  const crewNow = await pg.evaluate(() => [...document.querySelectorAll('#activeSel option')].map(o => o.value));
+  const opening = await pg.inputValue('#activeSel');
+  const other = crewNow.find(n => n !== opening);
+  if (other) {
+    await pg.selectOption('#activeSel', other); await pg.waitForTimeout(500);
+    await pg.reload({ waitUntil: 'networkidle' });
+    await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+    ok('the app reopens on the crew member you last looked at, without grading anyone',
+      await pg.inputValue('#activeSel') === other,
+      `wanted ${other}, got ${await pg.inputValue('#activeSel')}`);
+  } else {
+    ok('the crew-memory check has someone other than the opening pick to choose',
+      false, `roster ${crewNow.join(',')}, opened on ${opening}`);
+  }
+}
+
+/* Back to a clean slate: the checks below are about baked data, not this residue. */
 await pg.evaluate(() => localStorage.clear());
 await pg.reload({ waitUntil: 'networkidle' });
 await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });

@@ -47,9 +47,12 @@ export default function ShowAllPanel() {
   if (!core.showAllOpen) return null;
   /* Grouped by event code and numbered in order, so the list reads ST-01,
      ST-02 … and a search for "ST" returns that family on its own. */
+  /* The label is in here because seven balls print something other than their
+     id — AVI-12 shows AVI-12A/B, NAAR shows NAAR-1 — and searching for what is
+     printed on the chart found nothing. */
   const rowText = e => {
     const d = core.infoFor(e.id);
-    return e.id + ' ' + (d.name || '') + ' ' + (d.crew || '') + ' ' + (d.pre || '');
+    return e.id + ' ' + (e.label || '') + ' ' + (d.name || '') + ' ' + (d.crew || '') + ' ' + (d.pre || '');
   };
   let shown = filterEvents(core.SYL, q, rowText);
   /* never filter away the row being edited — it would bin what has been typed */

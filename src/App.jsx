@@ -53,6 +53,11 @@ export default function App() {
     document.body.classList.toggle('tab-info', tab === 'info');
   }, [tab]);
 
+  /* Which tab is showing is React state, but the search has to reach it: on the
+     Info tab the board is display:none, so scrolling to a found event would be
+     measuring a hidden element and would land nowhere. */
+  useEffect(() => { core.setTabSink(setTab); return () => core.setTabSink(null); }, []);
+
   useEffect(() => {
     const esc = e => core.handleEscapeKey(e);
     const del = e => core.handleDeleteKey(e);

@@ -152,11 +152,41 @@ export function SylModal() {
   return <SylModalInner />;
 }
 
-/* ---------- reorder syllabi ---------- */
-function OrdModalInner() {
-  const [list, setList] = useState(() => core.orderedSylNames());
+/* ---------- reorder syllabi, courses or crew ----------
+   One component, three modes. The rows, the drag handling and the ▲/▼ buttons
+   are identical; only the list, the row tag and where it saves differ. Three
+   copies would mean fixing the next drag bug three times — and drag-and-drop
+   does not work by touch, so the ▲/▼ path is the only one a phone has. */
+const ORD_MODES = {
+  syllabus: {
+    title: 'Syllabus order',
+    note: 'Drag a row, or use ▲/▼. This sets the order of the Syllabus dropdown for every course.',
+    read: () => core.orderedSylNames(),
+    tag: n => (core.builtinOf(n) ? (core.CUSTOMS[n] ? 'built-in ✎ edited' : 'built-in') : 'custom'),
+    save: l => core.saveOrderList(l),
+  },
+  course: {
+    title: 'Course order',
+    note: 'Drag a row, or use ▲/▼. This sets the order of the Course dropdown, and everyone sharing this tracker sees it.',
+    read: () => core.COURSES.slice(),
+    tag: n => (n === core.course ? 'current' : ''),
+    save: l => core.saveCourseOrder(l),
+  },
+  crew: {
+    title: 'Crew order',
+    note: 'Drag a row, or use ▲/▼. This also sets which slice of every ball belongs to whom — first in the list is the first slice.',
+    read: () => core.roster.slice(),
+    tag: (n, i) => '#' + (i + 1),
+    save: l => core.saveCrewOrder(l),
+  },
+};
+function OrdModalInner({ mode }) {
+  const cfg = ORD_MODES[mode] || ORD_MODES.syllabus;
+  const [list, setList] = useState(() => cfg.read());
   const fromRef = useRef(null);
-  const hid = core.SYL_NAMES.filter(n => core.isHidden(n));
+  /* Deleted built-ins can only be restored for syllabi; courses and crew have
+     no shipped originals to come back from. */
+  const hid = mode === 'syllabus' ? core.SYL_NAMES.filter(n => core.isHidden(n)) : [];
   const move = (i, j) => setList(l => { const a = [...l]; [a[i], a[j]] = [a[j], a[i]]; return a; });
   const restore = async n => {
     await core.restoreHiddenSyl(n);
@@ -165,12 +195,12 @@ function OrdModalInner() {
   return (
     <>
       <div className="overlay" id="ordOverlay" style={{ zIndex: 70, display: 'block' }} onClick={core.closeOrd}></div>
-      <div className="modal" id="ordModal" style={{ zIndex: 71, width: 'min(420px,92vw)', display: 'block' }}>
-        <h2>Syllabus order</h2>
-        <div className="mini" style={{ marginBottom: 8 }}>Drag a row, or use ▲/▼. This sets the order of the Syllabus dropdown for every course.</div>
+      <div className="modal" id="ordModal" data-ord={mode} style={{ zIndex: 71, width: 'min(420px,92vw)', display: 'block' }}>
+        <h2 id="ordTitle">{cfg.title}</h2>
+        <div className="mini" style={{ marginBottom: 8 }}>{cfg.note}</div>
         <div id="ordList" style={{ maxHeight: '52vh', overflow: 'auto', border: '1px solid var(--line)', borderRadius: 8 }}>
           {list.map((n, i) => {
-            const tag = core.builtinOf(n) ? (core.CUSTOMS[n] ? 'built-in ✎ edited' : 'built-in') : 'custom';
+            const tag = cfg.tag(n, i);
             return (
               <div key={n} className="ordrow" draggable
                 onDragStart={e => { fromRef.current = i; try { e.dataTransfer.setData('text/plain', String(i)); e.dataTransfer.effectAllowed = 'move'; } catch (_) {} e.currentTarget.classList.add('drag'); }}
@@ -208,15 +238,17 @@ function OrdModalInner() {
         <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
           <button id="ordAlpha" style={{ marginRight: 'auto' }} title="Sort A to Z" onClick={() => setList(l => [...l].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })))}>A–Z</button>
           <button id="ordCancel" onClick={core.closeOrd}>Cancel</button>
-          <button className="primary" id="ordSave" onClick={() => core.saveOrderList(list)}>Save order</button>
+          <button className="primary" id="ordSave" onClick={() => cfg.save(list)}>Save order</button>
         </div>
       </div>
     </>
   );
 }
 export function OrdModal() {
-  if (!core.ordOpen) return null;
-  return <OrdModalInner />;
+  if (!core.ordMode) return null;
+  /* Keyed on the mode so switching lists rebuilds the working copy rather than
+     reordering the previous one. */
+  return <OrdModalInner key={core.ordMode} mode={core.ordMode} />;
 }
 
 /* ---------- Save a copy: pick what goes into a file you hand over ---------- */

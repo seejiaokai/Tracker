@@ -153,17 +153,21 @@ are missing and the printed `claude plugin install` command is the fix.
   `.modal`/`.overlay` class. Close it via `#cbCancel` or it silently swallows
   every later click.
 - z-index ladder: `.modal` 60 · `.lullcal` 70 · `#dlgModal`/`#ordModal` 71 ·
-  `#showAllPanel` 81 · `#infoModal` 91 · Cloud dialog 99999. Header menus 50.
-  Anything new that opens *over* Show All must clear 81.
+  `#showAllPanel` 81 · `#infoModal` 91 · Cloud dialog 99999. Header menus 50,
+  the phone search strip 52. Anything new that opens *over* Show All must clear 81.
+- The desktop bar has **no spare width at 1440**. Adding one control wrapped the
+  header onto two rows and cost 44px of chart. The heading hides below 1600px to
+  pay for the search box; the next addition has to find its own room.
+- `#ordModal` serves syllabi, courses **and** crew — one `core.ordMode`, one set
+  of ids, `data-ord` says which. Only one can ever be open.
 - The page column lives on **`#root`**, not `body` — React mounts everything
   inside it, so a flex column on `body` lays out `#root` alone and the whole page
   scrolls instead of the board. `#root` needs `min-width:0` too, or the phone's
   scrollable one-row header widens every card.
-- **`styles.css` has two `@media(max-width:1050px)` blocks, one near the top and
-  one at the end.** Phone overrides belong in the *last* one: same specificity
-  means later wins, and the general rules sit between them. This has silently
-  beaten a whole block of phone rules once and a `padding-bottom` once — the
-  second time only the deployed site showed it.
+- **`styles.css` has two `@media(max-width:1050px)` blocks, top and end.** Phone
+  overrides belong in the *last*: same specificity means later wins, and the
+  general rules sit between them. This has silently beaten a whole block of
+  phone rules once and a `padding-bottom` once — only the deployed site showed it.
 - Grid columns: always `minmax(0,1fr)`, never `1fr`. A bare `1fr` takes its
   minimum from content, and a `dd/mm/yyyy` box then pushes the panel wider than
   the screen. This has bitten three separate layouts.

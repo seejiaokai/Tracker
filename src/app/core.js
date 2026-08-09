@@ -13,6 +13,7 @@ import { SEED_STATE, SEED_STAMP } from '../data/seedState.js';
 import { storage, flushNow, loadLatest, cloudButtonClick, setCloudSinks, getCloudCache, cloudCfg } from '../sync/cloud.js';
 import * as FMT from './fileFormat.js';
 import * as FS from './fileStore.js';
+import { findEvents } from './eventOrder.js';
 
 export { SYLLABI, SYL_NAMES, DEFAULT_SYL_NAME, DEFAULT_SYL_ORDER, DEFAULT_LAYOUTS, EVENT_INFO };
 export { cloudButtonClick };
@@ -92,6 +93,20 @@ export const BUCKETS = [
 const mem = {};
 async function sGet(k) { try { const r = await storage.get(k); return r ? r.value : null; } catch (e) { return mem[k] ?? null; } }
 async function sSet(k, v) { mem[k] = v; setSaveStatus('', 'saving'); try { await storage.set(k, v); setSaveStatus('', 'ok'); } catch (e) { setSaveStatus('local only', 'ok'); } }
+
+/* ---------- this browser's own preferences ----------
+   Which course and which crew member you were last on is a view preference,
+   not data. Everything that goes through sSet lands in ONE SharePoint file
+   that the whole team shares, so storing it there would let whoever used the
+   app last decide what opens for everybody else.
+   The prefix matters: sync/local.js sweeps EVERY "ocu:" localStorage key into
+   that shared map on its fallback path, so this deliberately sits outside it.
+   Both calls swallow their errors (Safari private mode), which means a store
+   that cannot be read degrades to "opens on the first course" rather than
+   breaking the boot. */
+const PP = 'ocuLocal:';
+function prefGet(k) { try { return localStorage.getItem(PP + k); } catch (e) { return null; } }
+function prefSet(k, v) { try { localStorage.setItem(PP + k, v); } catch (e) {} }
 
 /* ---------- app state ---------- */
 export let COURSES = [], course = null, active = null;
@@ -343,6 +358,12 @@ async function migrateRosters(c) {
 async function loadCourse(c, restoreLastSyllabus = false) {
   loading = true;
   course = c;
+  /* One site covers init, switchCourse, addCourse, renCourse and delCourse.
+     Raw and synchronous, so unlike sSet it never flickers the save status. */
+  prefSet('lastCourse', c);
+  /* A ring left over from another syllabus would re-light the moment the user
+     came back to it. Cleared without redrawing: every caller renders anyway. */
+  searchHit = null; searchQ = ''; searchCount = 0; searchAt = 0;
   const pr = await sGet(kPlan(c)); plan = pr ? JSON.parse(pr) : { lulls: [], mode: 'pace', epw: 2, target: null, sylName: DEFAULT_SYL_NAME, custom: false };
   if (!plan.sylName) plan.sylName = DEFAULT_SYL_NAME;
   const cs = await sGet(kSyls(c)); CUSTOMS = cs ? JSON.parse(cs) : {};
@@ -391,7 +412,13 @@ async function loadCourse(c, restoreLastSyllabus = false) {
   await migrateRosters(c);
   const rr = await sGet(kRosterFor(c, plan.sylName));
   roster = rr ? JSON.parse(rr) : [];
-  active = (__lastS && roster.includes(__lastS)) ? __lastS : (roster[0] || null);
+  /* Your own last pick first, then the last person anyone GRADED on this course
+     (kLastStudent), then whoever is at the top. The roster is per syllabus, so
+     the includes() guard quietly handles remembering someone who is not on the
+     syllabus being opened. */
+  const __myS = prefGet('lastCrew:' + c);
+  active = (__myS && roster.includes(__myS)) ? __myS
+    : ((__lastS && roster.includes(__lastS)) ? __lastS : (roster[0] || null));
   await loadLayout();
   await loadStudent();
   /* one-time marks + layout migration from the old syllabus name */
@@ -566,6 +593,10 @@ function ballGroup(ev, available) {
   }
   const dark = DARKC.has(ev.type) ? 'lbl' : 'lbl lbll';
   let hl = available ? `<circle cx="${cx}" cy="${cy}" r="${rO + 3}" fill="none" stroke="#ffd23f" stroke-width="2.6" class="avail"/>` : '';
+  /* The search ring sits at rO+8. Its inner edge is 34.06, clear of the yellow
+     available ring's outer edge even when svg.perf fattens that to 31.96, so
+     the two can never touch or be read as one mark. */
+  if (searchHit === ev.id) hl += `<circle cx="${cx}" cy="${cy}" r="${rO + 8}" fill="none" stroke="#00e5c8" stroke-width="2.4" class="found"/>`;
   if (arrangeMode && connectSrc === ev.id) hl += `<circle cx="${cx}" cy="${cy}" r="${rO + 5}" fill="none" stroke="#36c2ff" stroke-width="3"/>`;
   if (arrangeMode && selBalls.has(ev.id)) hl += `<circle cx="${cx}" cy="${cy}" r="${rO + 5}" fill="none" stroke="#36c2ff" stroke-width="1.6" stroke-dasharray="3 2"/>`;
   const num = (ev.num != null && ev.num !== '') ? `<circle cx="${size - 5}" cy="5" r="8.5" class="numbg"/><text class="numbadge" x="${size - 5}" y="8" text-anchor="middle">${escapeId(ev.num)}</text>` : '';
@@ -1909,6 +1940,44 @@ export function scrollToEvent(id) {
   bd.scrollLeft += (r.left + r.width / 2) - (b.left + b.width / 2);
   return true;
 }
+/* ---------- find an event on the board ----------
+   The ring is baked into the SVG string, so changing the hit means redrawing
+   the board, not just notifying React. */
+export let searchHit = null, searchQ = '', searchCount = 0, searchAt = 0;
+/* App.jsx owns the phone's Flow/Info tab. Searching from the Info tab would
+   measure a display:none board and scroll to nowhere, so the search switches
+   back first — same sink arrangement as setCloudSinks. */
+let tabSink = null;
+export function setTabSink(fn) { tabSink = fn; }
+function jumpTo(id) {
+  searchHit = id || null;
+  if (id && tabSink) { try { tabSink('flow'); } catch (_) {} }
+  renderBoard();
+  if (!id) return false;
+  /* After the frame, so the balls exist and applyFlowZoom's scale has landed —
+     measuring in the same tick reads a stale one. Same reason init() defers. */
+  if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => scrollToEvent(id));
+  else scrollToEvent(id);
+  return true;
+}
+export function runSearch(q, step) {
+  searchQ = q == null ? '' : q;
+  const hits = findEvents(SYL, searchQ);
+  searchCount = hits.length;
+  if (!hits.length) {
+    /* A search that finds nothing is not "another search": the board stays put
+       and whatever was ringed stays ringed. */
+    searchAt = 0; notify(); return false;
+  }
+  searchAt = step ? ((searchAt + 1) % hits.length) : 0;
+  const done = jumpTo(hits[searchAt].id);
+  notify(); return done;
+}
+export function clearSearch() {
+  searchQ = ''; searchCount = 0; searchAt = 0;
+  if (searchHit) { searchHit = null; renderBoard(); }
+  notify();
+}
 /* Only when the record belongs to the syllabus on screen. Switching syllabus
    under the user to chase a mark would be a surprise, and would prompt about
    unsaved flow edits into the bargain. */
@@ -2019,6 +2088,9 @@ export async function removeStudent(v) {
 }
 export function setActive(v) {
   active = v; renderSide();
+  /* Merely looking at someone counts. Before this, only grading was remembered,
+     so picking a crew member and coming back tomorrow forgot them. */
+  prefSet('lastCrew:' + course, v);
   /* Jump to where this student was last marked, so picking someone halfway
      through their course does not land at the top of the chart. */
   showLastEdit(v);
@@ -2094,14 +2166,41 @@ export async function switchSyllabus(v) {
   clearDirty(); plan.sylName = v; plan.custom = false; await savePlan(); await loadCourse(course);
   refreshCourses(); refreshSyl(); refreshActive(); renderBoard(); renderSide(); setSaveStatus('switched to ' + v, 'ok');
 }
-/* ---------- reorder syllabi (modal is <OrdModal/>) ---------- */
-export let ordOpen = false;
-export function openOrd() { ordOpen = true; notify(); }
-export function closeOrd() { ordOpen = false; notify(); }
+/* ---------- reorder syllabi, courses or crew (modal is <OrdModal/>) ----------
+   One mode variable, so only one list can ever be open and the modal keeps a
+   single stable set of ids. The three openers take no argument on purpose:
+   Header.jsx passes them straight to onClick, so a single openOrd(mode) would
+   silently receive the click event as its mode. */
+export let ordMode = null;               /* null | 'syllabus' | 'course' | 'crew' */
+export function openOrd() { ordMode = 'syllabus'; notify(); }
+export function openOrdCourse() { ordMode = 'course'; notify(); }
+export function openOrdCrew() { ordMode = 'crew'; notify(); }
+export function closeOrd() { ordMode = null; notify(); }
+/* Rank against what actually exists now, the way orderedSylNames does: a
+   teammate can add a course or a student over SharePoint while the modal sits
+   open, and dropping them would delete their work rather than reorder it. */
+function reranked(list, live) {
+  const ranked = list.filter(n => live.includes(n));
+  return [...ranked, ...live.filter(n => !ranked.includes(n))];
+}
 export async function saveOrderList(list) {
   SYL_ORDER = [...list]; await saveSylOrder();
   closeOrd(); refreshSyl();
   setSaveStatus('syllabus order saved', 'ok');
+}
+/* COURSES is itself the display order, so there is no separate ranking key. */
+export async function saveCourseOrder(list) {
+  COURSES = reranked(list, COURSES); await saveCourses();
+  closeOrd(); refreshCourses();
+  setSaveStatus('course order saved', 'ok');
+}
+/* renderBoard is NOT optional: wedge(i,n) slices every ball's ring by roster
+   index, so without it the key re-orders while the balls keep the old
+   assignment until the next grade. */
+export async function saveCrewOrder(list) {
+  roster = reranked(list, roster); await saveRoster();
+  closeOrd(); refreshActive(); renderBoard(); renderSide();
+  setSaveStatus('crew order saved', 'ok');
 }
 export async function restoreHiddenSyl(n) {
   SYL_HIDDEN = SYL_HIDDEN.filter(x => x !== n);
@@ -2117,7 +2216,9 @@ export async function switchCourse(v) {
 }
 export async function addCourse() {
   const v = ((await uiPrompt('New course name (e.g. 26BBSG):')) || '').trim().toUpperCase(); if (!v) return;
-  if (!COURSES.includes(v)) { COURSES.push(v); await saveCourses(); }
+  /* Front, not back: the newest course is the one being set up, so it should be
+     the one the dropdown offers first and the one the app falls back to. */
+  if (!COURSES.includes(v)) { COURSES.unshift(v); await saveCourses(); }
   const chosen = curSyl(); const useName = allSylNames().indexOf(chosen) >= 0 ? chosen : firstSylName();
   await sSet(kPlan(v), JSON.stringify({ lulls: [], mode: 'pace', epw: 2, target: null, sylName: useName, custom: false }));
   for (const sn of allSylNames()) await sSet(kRosterFor(v, sn), JSON.stringify([]));
@@ -2791,7 +2892,12 @@ export async function init() {
   await applyBundle();
   await loadCourses();
   await loadSylPrefs();
-  await loadCourse(COURSES[0], true); await loadEventInfo(); await loadSylOrder();
+  /* After loadCourses, which is what fills COURSES — a course that was deleted,
+     renamed, or only ever existed in someone else's browser simply fails the
+     membership test and falls back to the top of the list. */
+  const __want = prefGet('lastCourse');
+  await loadCourse((__want && COURSES.includes(__want)) ? __want : COURSES[0], true);
+  await loadEventInfo(); await loadSylOrder();
   ready = true;
   refreshCourses(); refreshSyl(); refreshActive(); renderBoard(); renderSide();
   /* After the first paint, so the balls exist to measure. */
