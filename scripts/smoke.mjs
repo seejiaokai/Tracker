@@ -140,7 +140,110 @@ await pg.waitForSelector('#flowSvg .ball');
 await openShowAll();
 ok('edits survive a reload', (await meta('ST-01')).includes('PERSIST/CHECK'));
 await resetRow('ST-01');
+
+/* ---- Show All is grouped by event code, in number order ----
+   The user asked for this on 9 Aug: the list should read ST-01, ST-02 ... and
+   typing a code should bring back that family alone, in order. */
+{
+  const seen = await pg.evaluate(() => ({
+    heads: [...document.querySelectorAll('#saBody .saphase')].map(e => e.textContent),
+    ids: [...document.querySelectorAll('#saBody .sid')].map(e => e.textContent),
+  }));
+  ok('Show All groups by event code, not by phase',
+    seen.heads.includes('ST') && seen.heads.includes('ACG') && !seen.heads.includes('Ground Academics'),
+    seen.heads.slice(0, 6).join(' | '));
+  ok('the first two groups are the ones the course starts with',
+    seen.heads[0] === 'ST' && seen.heads[1] === 'ACG', seen.heads.slice(0, 3).join(' | '));
+  /* every group must be internally ordered, ST-9 before ST-10 */
+  const groups = await pg.evaluate(() => {
+    const out = []; let cur = null;
+    for (const el of document.querySelectorAll('#saBody .saphase, #saBody .sarow .sid')) {
+      if (el.classList.contains('saphase')) { cur = { cat: el.textContent, ids: [] }; out.push(cur); }
+      else if (cur) cur.ids.push(el.textContent);
+    }
+    return out;
+  });
+  const nat = (a, b) => {
+    const A = a.match(/\d+|\D+/g) || [], B = b.match(/\d+|\D+/g) || [];
+    for (let i = 0; i < Math.min(A.length, B.length); i++) {
+      const x = A[i], y = B[i], nx = /^\d/.test(x), ny = /^\d/.test(y);
+      if (nx && ny) { const d = +x - +y; if (d) return d; } else if (x !== y) return x < y ? -1 : 1;
+    }
+    return A.length - B.length;
+  };
+  const unsorted = groups.filter(g => JSON.stringify(g.ids) !== JSON.stringify(g.ids.slice().sort(nat)));
+  ok('every group runs in increasing number order', unsorted.length === 0,
+    unsorted.slice(0, 2).map(g => g.cat + ': ' + g.ids.join(',')).join(' | '));
+
+  /* filtering by a code shows that family and nothing else */
+  await pg.fill('#saSearch', 'ST'); await pg.waitForTimeout(300);
+  const filtered = await pg.evaluate(() => ({
+    ids: [...document.querySelectorAll('#saBody .sid')].map(e => e.textContent),
+    heads: [...document.querySelectorAll('#saBody .saphase')].map(e => e.textContent),
+  }));
+  ok('filtering "ST" returns only events whose code starts with ST',
+    filtered.ids.length > 5 && filtered.ids.every(i => i.startsWith('ST')),
+    filtered.ids.filter(i => !i.startsWith('ST')).slice(0, 4).join(', '));
+  ok('filtering "ST" keeps them in increasing order',
+    JSON.stringify(filtered.ids) === JSON.stringify(filtered.ids.slice().sort(nat)),
+    filtered.ids.join(','));
+  ok('a filtered code shows as a single group', filtered.heads.length === 1, filtered.heads.join(' | '));
+  /* a word that is not a code still searches the whole row */
+  await pg.fill('#saSearch', 'refresher'); await pg.waitForTimeout(300);
+  const loose = await pg.evaluate(() => [...document.querySelectorAll('#saBody .sid')].map(e => e.textContent));
+  ok('searching a word still looks inside names and crew', loose.length > 0, loose.slice(0, 4).join(', '));
+  await pg.fill('#saSearch', ''); await pg.waitForTimeout(250);
+}
+
 await pg.click('#saClose'); await pg.waitForTimeout(200);
+
+/* ---- editing on a renumbered syllabus must not rewrite the others ----
+   Tx 2026 gives some events its own wording (its SA-5 flies the BCTM SA-6
+   profile). The editor pre-fills from that merged view, so saving a row while
+   Tx is on screen — even changing nothing — used to store the Tx wording as a
+   GLOBAL override and push it onto 2026 and A/G - A/A too. One real save of
+   SA-5 did exactly that; it arrived in the user's 9 Aug file. */
+{
+  const pick = async label => {
+    const v = await pg.evaluate(l =>
+      [...document.querySelectorAll('#sylSel option')].find(o => o.textContent.trim().startsWith(l))?.value, label);
+    if (v == null) return false;
+    await pg.selectOption('#sylSel', v); await pg.waitForTimeout(700); return true;
+  };
+  const nameOf = async id => {
+    await openShowAll();
+    await pg.fill('#saSearch', id); await pg.waitForTimeout(250);
+    const t = await row(id).locator('.snm').textContent();
+    await pg.fill('#saSearch', ''); await pg.waitForTimeout(150);
+    await pg.click('#saClose'); await pg.waitForTimeout(150);
+    return (t || '').trim();
+  };
+  if (await pick('2026') && await pick('Tx 2026')) {
+    const txName = await nameOf('SA-5');
+    ok('Tx 2026 shows its own wording for SA-5', /BCTM SA-6/.test(txName), txName);
+    /* open SA-5 on Tx and save it untouched */
+    await openShowAll();
+    await pg.fill('#saSearch', 'SA-5'); await pg.waitForTimeout(250);
+    await row('SA-5').locator('button.sedit').click(); await pg.waitForSelector('.saedit');
+    await pg.locator('.saedit-btns button.primary').click(); await pg.waitForTimeout(450);
+    await pg.fill('#saSearch', ''); await pg.waitForTimeout(150);
+    await pg.click('#saClose'); await pg.waitForTimeout(200);
+    await pick('2026');
+    const plainName = await nameOf('SA-5');
+    ok('saving a row on Tx leaves the other charts\' wording alone',
+      !/BCTM SA-6/.test(plainName), plainName);
+    await pick('Tx 2026');
+    await openShowAll();
+    await pg.fill('#saSearch', 'SA-5'); await pg.waitForTimeout(250);
+    await resetRow('SA-5');
+    await pg.fill('#saSearch', ''); await pg.waitForTimeout(150);
+    await pg.click('#saClose'); await pg.waitForTimeout(200);
+    await pick('2026');
+  } else {
+    ok('Tx 2026 shows its own wording for SA-5', false, 'could not switch syllabus');
+    ok('saving a row on Tx leaves the other charts\' wording alone', false, 'could not switch syllabus');
+  }
+}
 
 /* ---- pop-up editor: compact, and above the Show All panel ---- */
 const clickBall = id => pg.evaluate(i => {
@@ -199,6 +302,42 @@ ok('this browser can write back into the same file', fsCaps.canWrite === true);
 ok('the page is a secure context, which the file pickers require', fsCaps.secure === true);
 
 /* ---- the Open and Save controls ---- */
+/* ---- how the Show All list is ordered (plain Node: no browser APIs) ----
+   Every code in today's syllabi is zero-padded, so plain text sorting happens
+   to agree with number order and the on-screen list cannot tell the two apart.
+   Test the function directly, with the unpadded codes a future syllabus may
+   bring, or this is a check that measures nothing. */
+{
+  const EO = await import('../src/app/eventOrder.js');
+  ok('a code is the part before the dash',
+    EO.categoryOf('ST-10 ACM') === 'ST' && EO.categoryOf('TR(S)-LAO') === 'TR(S)'
+    && EO.categoryOf('SA(S)-1') === 'SA(S)' && EO.categoryOf('IEPE/IPC') === 'IEPE/IPC',
+    [EO.categoryOf('ST-10 ACM'), EO.categoryOf('TR(S)-LAO'), EO.categoryOf('SA(S)-1')].join(' | '));
+  const unpadded = ['ST-10', 'ST-2', 'ST-1', 'ST-21', 'ST-3'];
+  ok('numbers sort as numbers, not as text',
+    JSON.stringify(unpadded.slice().sort(EO.compareIds)) === JSON.stringify(['ST-1', 'ST-2', 'ST-3', 'ST-10', 'ST-21']),
+    unpadded.slice().sort(EO.compareIds).join(','));
+  ok('a suffix sorts after the bare number, and beside its own kind',
+    JSON.stringify(['ST-16B', 'ST-17', 'ST-16'].sort(EO.compareIds)) === JSON.stringify(['ST-16', 'ST-16B', 'ST-17']),
+    ['ST-16B', 'ST-17', 'ST-16'].sort(EO.compareIds).join(','));
+  const evs = [
+    { id: 'ST-01', seq: 0 }, { id: 'ACG-01', seq: 2 }, { id: 'ST-10', seq: 40 },
+    { id: 'ST-2', seq: 1 }, { id: 'ACG-02', seq: 3 },
+  ];
+  const g = EO.groupByCategory(evs);
+  ok('groups lead with whichever code the course reaches first',
+    g.map(x => x.cat).join(',') === 'ST,ACG', g.map(x => x.cat).join(','));
+  ok('inside a group the order is by number, not by where it sits in the course',
+    g[0].events.map(e => e.id).join(',') === 'ST-01,ST-2,ST-10', g[0].events.map(e => e.id).join(','));
+  const txt = e => e.id + ' the ST briefing';
+  ok('typing a code returns that family alone',
+    EO.filterEvents(evs, 'ST', txt).map(e => e.id).join(',') === 'ST-01,ST-10,ST-2',
+    EO.filterEvents(evs, 'ST', txt).map(e => e.id).join(','));
+  ok('a word that is no code still searches the whole row',
+    EO.filterEvents(evs, 'briefing', txt).length === evs.length);
+  ok('an empty filter keeps everything', EO.filterEvents(evs, '   ', txt).length === evs.length);
+}
+
 const FFNAME = await import('../src/app/fileFormat.js');
 ok('the Open button exists', await pg.locator('#openFileBtn').count() === 1);
 /* Never more than one — two Save buttons side by side is a fault this suite has
@@ -660,16 +799,15 @@ await pg.waitForSelector('#flowSvg .ball');
 await pg.selectOption('#sylSel', await pg.evaluate(() =>
   [...document.querySelectorAll('#sylSel option')].find(o => o.textContent.startsWith('2026')).value));
 await pg.waitForTimeout(800);
-/* The A/G - A/A chart mirrors the course map with one long drawn wire (NN) and
-   shared bus rails. Two rendering faults are invisible in the data and only
-   show on screen, so check the drawn paths themselves (found 9 Aug by agents
-   auditing the rendered bands). A fresh browser context, because the fault was
-   precisely that a FIRST visit — no saved chart, baked defaults only — lost
-   the kept-hop list and severed the rails:
-   - an arrow crossing the drawn NN wire must keep its hop arc, or the crossing
-     reads as a junction;
-   - a bus rail must NOT hop over its own risers, or half the bus looks
-     disconnected. */
+/* Shipped chart metadata must reach a FIRST visit - no saved chart, baked
+   defaults only. That was a real fault: __unmerges, __merges and __font were
+   read from a saved layout but never from the shipped one, so seven crossings
+   drew as junctions, two bus rails drew as cut, and the wide ST-10 labels were
+   clipped by their rings. All three come from the same fallback branch in
+   loadEdgeMeta/loadLineDefaults, so proving two of them proves the branch.
+   Found 9 Aug by agents auditing the rendered chart band by band.
+   Geometry is read from the page rather than hard-coded: the user owns these
+   positions and moves them freely, so a pixel-pinned path would be noise. */
 {
   const ctx2 = await b.newContext();
   const pg2 = await ctx2.newPage();
@@ -677,31 +815,42 @@ await pg.waitForTimeout(800);
   await pg2.waitForSelector('#flowSvg .ball');
   const agVal2 = await pg2.evaluate(() =>
     [...document.querySelectorAll('#sylSel option')].find(o => o.textContent.trim().startsWith('A/G - A/A 2026'))?.value);
-  if (agVal2 != null) {
+  if (agVal2 == null) {
+    ok('a bus rail is not severed by hops over its own risers', false, 'A/G - A/A 2026 missing from #sylSel');
+    ok('shipped per-ball font sizes reach a fresh visitor', false, 'A/G - A/A 2026 missing from #sylSel');
+  } else {
     await pg2.selectOption('#sylSel', agVal2); await pg2.waitForTimeout(900);
-    const hops = await pg2.evaluate(() => {
-      const ds = [...document.querySelectorAll('#flowSvg path')].map(p => p.getAttribute('d') || '');
-      const at = pre => ds.find(d => d.startsWith(pre)) || '';
-      return {
-        overNN: at('M450.0 9523.0'),   /* SA(S)-7 -> SA-5, crosses the NN wire  */
-        /* AVI-06 -> AVI-10: same start as AVI-06 -> IAT-02, so pin the far end too */
-        rail: ds.find(d => d.startsWith('M237.0 1648.0') && d.endsWith('L460.0 1727.0')) || '',
+    /* Find the arrow running from one named ball to another by its endpoints. */
+    const railD = await pg2.evaluate(([from, to]) => {
+      const centre = id => {
+        const g = [...document.querySelectorAll('#flowSvg g.ball')].find(x => x.getAttribute('data-id') === id);
+        if (!g) return null;
+        const bb = g.getBBox(), t = /translate\(([-\d.]+),\s*([-\d.]+)\)/.exec(g.getAttribute('transform') || '');
+        const dx = t ? parseFloat(t[1]) : 0, dy = t ? parseFloat(t[2]) : 0;
+        return { x: bb.x + bb.width / 2 + dx, y: bb.y + bb.height / 2 + dy };
       };
-    });
-    ok('crossings over the drawn NN wire keep their hop',
-      hops.overNN.includes('A5 5'), hops.overNN.slice(0, 90) || 'path not found');
+      const a = centre(from), z = centre(to);
+      if (!a || !z) return 'ball missing';
+      const near = (p, q) => Math.hypot(p.x - q.x, p.y - q.y) < 45;
+      for (const el of document.querySelectorAll('#flowSvg path')) {
+        if (el.classList.contains('edgehit')) continue;
+        const d = el.getAttribute('d') || '';
+        const nums = d.match(/-?\d+(?:\.\d+)?/g); if (!nums || nums.length < 4) continue;
+        const s0 = { x: +nums[0], y: +nums[1] };
+        const s1 = { x: +nums[nums.length - 2], y: +nums[nums.length - 1] };
+        if (near(s0, a) && near(s1, z)) return d;
+      }
+      return 'path not found';
+    }, ['AVI-06', 'AVI-10']);
+    /* AVI-06 and AVI-07 share one rail into the AVI-10 / IAT-02 pair. Hopping a
+       rail over its own riser cuts it in half on screen. */
     ok('a bus rail is not severed by hops over its own risers',
-      hops.rail !== '' && !hops.rail.includes('A5 5'), hops.rail.slice(0, 90) || 'path not found');
-    /* the wide ST-10 labels ship with a smaller per-ball font; a fresh visit
-       must adopt it or the ring clips the name (same loader gap as the hops) */
+      railD.startsWith('M') && !railD.includes('A5 5'), railD.slice(0, 100));
     const fs10 = await pg2.evaluate(() => {
       const t = document.querySelector('#flowSvg g.ball[data-id="ST-10 ACM"] text');
       return t ? t.getAttribute('style') : 'ball not found';
     });
     ok('shipped per-ball font sizes reach a fresh visitor', /font-size:\s*7px/.test(fs10), fs10);
-  } else {
-    ok('crossings over the drawn NN wire keep their hop', false, 'A/G - A/A 2026 missing from #sylSel');
-    ok('a bus rail is not severed by hops over its own risers', false, 'A/G - A/A 2026 missing from #sylSel');
   }
   await ctx2.close();
 }
@@ -1333,7 +1482,8 @@ ok('no drawn link claims a prerequisite the syllabus does not have', phantom.len
    (Their file also cut ST-10 out of LASDT(S)-1; they called that a mistake
    the same day, so that one link went back in and is NOT listed here.) */
 const USER_EDITS_2026 = {
-  'AVI-03': ['AVI-01'], 'AVI-04': ['AVI-01'],
+  /* 9 Aug: ST-03 put back on AVI-03 and AVI-04, so all three AVI-0x take it. */
+  'AVI-03': ['AVI-01', 'ST-03'], 'AVI-04': ['AVI-01', 'ST-03'],
   'ACM-3': ['ACM-2'],
   'SA-2': ['SA-1'], 'SA-3': ['SA-2'],
   'DAAR-1': ['INT(S)-2', 'TR-4'],
@@ -1402,12 +1552,49 @@ ok('no event the map strikes through is still in 2026', revived.length === 0, re
    Its structure genuinely differs from 2026 — surface attack comes BEFORE basic
    fighting manoeuvres here — so reading one into the other is the standing
    hazard. Every page of it says the flowchart supersedes the tables. */
+/* The user's own hand edits to A/G - A/A, made in the app and merged from their
+   saved file on 9 Aug 2026, after the chart was redrawn to the map's geometry.
+   As with USER_EDITS_2026 these deliberately depart from the document and
+   SUPERSEDE the map pins wherever they name the same event.
+
+   Two groups:
+   - the refresher tail, now shaped exactly as 2026's: DAAR -> DAAR-2, a
+     separate DAAR/NAAR -> NAAR-2, and ST-18 no longer taking the tail. Asked
+     for, and matching what they already did on the other two charts.
+   - five links the map draws that their file no longer carries (AAS-04, and
+     one feeder each on INT(S)-1, TR-1(P), TR-2, TR-4). In every case the other
+     feeders of the same bundle survive as line-derived links, so these look
+     like drops from redrawing those bundles rather than decisions. RAISED WITH
+     THE USER 9 Aug; recorded here as their file has them, not endorsed. Put
+     them back only on their word. */
+const USER_EDITS_AGAA = {
+  'DAAR': ['INT(S)-2', 'TR-4'],
+  'DAAR-2': ['DAAR'],
+  'DAAR/NAAR': ['DAAR-2'],
+  'NAAR-2': ['DAAR/NAAR'],
+  'ST-18': ['SAT-2', 'SATN-1'],
+  'SAN-1': ['NTR-1', 'SA(S)-7'],
+  'AAS-04': [],
+  'INT(S)-1': ['IEPE/IPC', 'ST-09', 'ST-11'],
+  'TR-1(P)': ['EPT-02', 'JMP-01', 'ST-16'],
+  'TR-2': ['TR-1(P)'],
+  'TR-4': ['TR-3'],
+};
+{
+  const bya = Object.fromEntries(SYLLABI['A/G - A/A 2026'].map(e => [e.id, e]));
+  const bad = Object.entries(USER_EDITS_AGAA).filter(([id, want]) =>
+    JSON.stringify((bya[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+  ok("the user's A/G - A/A hand edits hold", bad.length === 0,
+    bad.map(([id]) => `${id}=[${(bya[id]?.prereqs || []).join(',')}]`).join(' | '));
+}
+
 const MAPAG = JSON.parse(readFileSync(import.meta.dirname + '/course-map-agaa-2026.json', 'utf8'));
 const byAGfull = Object.fromEntries(SYLLABI['A/G - A/A 2026'].map(e => [e.id, e]));
 const agWrong = [], agMissing = [];
-for (const [id, want] of Object.entries(MAPAG.edges)) {
+for (const [id, want0] of Object.entries(MAPAG.edges)) {
   const ev = byAGfull[id];
   if (!ev) { agMissing.push(id); continue; }
+  const want = USER_EDITS_AGAA[id] || want0;   /* the user's edits supersede the map */
   const have = (ev.prereqs || []).slice().sort();
   if (JSON.stringify(have) !== JSON.stringify([...want].sort()))
     agWrong.push(`${id}: map=[${want.join(',')}] app=[${have.join(',')}]`);
@@ -1646,8 +1833,10 @@ const CHART_AGAA = {
   'SATN-1': ['SAT(S)-1', 'NTR-2', 'SAN-1'], 'ST-18': ['SAT-2', 'SATN-1', 'DAAR/NAAR'],
 };
 const byAG = Object.fromEntries(SYLLABI['A/G - A/A 2026'].map(e => [e.id, e]));
-const wrongAG = Object.entries(CHART_AGAA).filter(([id, want]) =>
-  JSON.stringify((byAG[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+const wrongAG = Object.entries(CHART_AGAA).filter(([id, want0]) => {
+  const want = USER_EDITS_AGAA[id] || want0;   /* the user's edits supersede the map */
+  return JSON.stringify((byAG[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort());
+});
 /* Air-to-air refresher chain, added to 2026 at the user's request. The Jul 26 map draws a
    single DAAR spine and one DAAR/NAAR box feeding ST-18, all in dashed line; the user asked
    for it split into four solid-line events instead, so this is deliberately NOT what the map
@@ -1718,7 +1907,8 @@ const AGAA_ADDED = {
   'TR(S)-1': ['T-04', 'ST-04', 'ST-05', 'OPS-02', 'OPS-03'],
   'T-10': ['IAT-08', 'AAS-04'],
   'TR-5(P)': ['TR-4', 'IEPE/IPC', 'AAS-04'],
-  'DAAR': ['AAS-04', 'INT(S)-2', 'TR-4'],
+  /* DAAR dropped AAS-04 in the user's 9 Aug file - see USER_EDITS_AGAA */
+  'DAAR': ['INT(S)-2', 'TR-4'],
 };
 const byAG2 = Object.fromEntries(SYLLABI['A/G - A/A 2026'].map(e => [e.id, e]));
 const missAG = Object.entries(AGAA_ADDED).filter(([id, want]) =>
@@ -1746,12 +1936,19 @@ ok('A/G - A/A prereqs match its own course map', wrongAG.length === 0,
   }
   ok('A/G - A/A doc layout: no two balls overlap', overlaps.length === 0, overlaps.join(', '));
   ok('A/G - A/A doc layout starts at ST-01', idsAG.every(id => (L[id]?.y ?? -1) >= (L['ST-01']?.y ?? 0)));
+  /* Dragging a ball lands it on a fraction of a pixel, so 'the same lane' is
+     within a couple of pixels, not exactly equal. */
   const simLane = ['SA(S)-1', 'SA(S)-2', 'SA(S)-3', 'SA(S)-4', 'SA(S)-5', 'SA(S)-6', 'SA(S)-7', 'ACM(S)-1'];
   ok('A/G - A/A sim wire runs straight down one lane',
-    simLane.every(id => L[id] && L[id].x === L['SA(S)-1'].x), simLane.map(id => `${id}@${L[id]?.x}`).join(' '));
+    simLane.every(id => L[id] && Math.abs(L[id].x - L['SA(S)-1'].x) < 2), simLane.map(id => `${id}@${L[id]?.x}`).join(' '));
   ok('A/G - A/A H wire is one straight line', L['DAAR'] && L['DAAR/NAAR'] && L['DAAR'].x === L['DAAR/NAAR'].x);
-  const nn = (L.__lines || []).find(l => l?.a?.t === 'edge' && l.a.p === 'SA-4' && l?.b?.t === 'ball' && l.b.id === 'NTR-1');
-  ok('A/G - A/A NN wire is drawn and carries SA-4 -> NTR-1', !!nn);
+  /* The NN wire is the page-spanning one from SA-4 down to NTR-1. It must stay
+     a DRAWN line (so it reads like the document) rather than an auto-routed
+     arrow, whatever shape the user redraws it into - hence __derived, not a
+     particular anchor. */
+  ok('A/G - A/A NN wire is drawn and carries SA-4 -> NTR-1',
+    (L.__derived || []).includes('SA-4\u25b8NTR-1')
+    && (sylAG.find(e => e.id === 'NTR-1')?.prereqs || []).includes('SA-4'));
   const edgeKeys = new Set(sylAG.flatMap(e => (e.prereqs || []).map(p => p + '▸' + e.id)));
   const strayMeta = Object.keys(L.__edgeMeta || {}).filter(k => !edgeKeys.has(k));
   ok('A/G - A/A routing metadata only decorates real links', strayMeta.length === 0, strayMeta.join(', '));
@@ -1769,7 +1966,7 @@ ok('A/G - A/A prereqs match its own course map', wrongAG.length === 0,
    nothing for now. Expected to drop back toward 1 as they finish. */
 /* 9 Aug: the user detached the DAAR/NAAR refresher tail from ST-18 on both
    2026 charts, so NAAR-2 is a second, deliberate loose end. */
-const ENDPOINTS = { '2026': 2, 'A/G - A/A 2026': 1, 'Tx 2026': 2, 'Tx 2024': 2, '2024': 6 };
+const ENDPOINTS = { '2026': 2, 'A/G - A/A 2026': 2, 'Tx 2026': 2, 'Tx 2024': 2, '2024': 6 };
 const ends = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const used = new Set(syl.flatMap(e => e.prereqs || []));
@@ -1813,7 +2010,7 @@ const SPAN_ALLOWED = {
   'A/G - A/A 2026': new Set([
     'OPS-01->OPS-03', 'OPS-01->OPS-04',              /* B wire       */
     'TR-4->DAAR', 'AAS-04->DAAR', 'INT(S)-2->DAAR',  /* H wire feeds */
-    'DAAR->DAAR/NAAR',                               /* H wire spine */
+    'DAAR->DAAR-2', 'DAAR-2->DAAR/NAAR', 'DAAR/NAAR->NAAR-2',  /* H wire spine */
     'AAS-04->T-10',                                  /* riser to T-10 */
     'LASDT(S)-1->SA(S)-1',                           /* J/N wire     */
     'LASDT-2->SA-1',                                 /* M wire       */

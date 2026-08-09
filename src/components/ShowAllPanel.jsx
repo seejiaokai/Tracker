@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import * as core from '../app/core.js';
+import { groupByCategory, filterEvents } from '../app/eventOrder.js';
 
 /* Compact in-place editor for one row of the Show All list — same five fields as the
    pop-up editor, so there is no need to open a modal on top of this panel. */
@@ -44,22 +45,23 @@ export default function ShowAllPanel() {
   const [q, setQ] = useState('');
   const [editId, setEditId] = useState(null);
   if (!core.showAllOpen) return null;
-  const query = q.toLowerCase();
-  const phases = []; const seen = {};
-  core.SYL.forEach(e => { const p = e.phase || 'Other'; if (!seen[p]) { seen[p] = []; phases.push(p); } seen[p].push(e); });
+  /* Grouped by event code and numbered in order, so the list reads ST-01,
+     ST-02 … and a search for "ST" returns that family on its own. */
+  const rowText = e => {
+    const d = core.infoFor(e.id);
+    return e.id + ' ' + (d.name || '') + ' ' + (d.crew || '') + ' ' + (d.pre || '');
+  };
+  let shown = filterEvents(core.SYL, q, rowText);
+  /* never filter away the row being edited — it would bin what has been typed */
+  if (editId && !shown.some(e => e.id === editId)) {
+    const cur = core.SYL.find(e => e.id === editId);
+    if (cur) shown = shown.concat([cur]);
+  }
   const blocks = [];
-  phases.forEach(p => {
-    const evs = seen[p].filter(e => {
-      /* never filter away the row being edited — it would bin what has been typed */
-      if (e.id === editId) return true;
-      const d = core.infoFor(e.id);
-      const hay = (e.id + ' ' + (d.name || '') + ' ' + (d.crew || '') + ' ' + (d.pre || '')).toLowerCase();
-      return !query || hay.includes(query);
-    });
-    if (!evs.length) return;
+  groupByCategory(shown).forEach(({ cat, events: evs }) => {
     blocks.push(
-      <React.Fragment key={p}>
-        <div className="saphase">{p}</div>
+      <React.Fragment key={cat}>
+        <div className="saphase">{cat}</div>
         {evs.map(e => {
           const d = core.infoFor(e.id);
           const pv = core.preText(e.id);
