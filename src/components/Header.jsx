@@ -74,6 +74,7 @@ export default function Header() {
         <Menu id="course" label="Course" title="Add, rename or delete a course">
           <button className="sm" id="addCourse" onClick={core.addCourse}>+ Add course</button>
           <button className="sm" id="renCourse" title="Rename the current course" onClick={core.renCourse}>✎ Rename course</button>
+          <button className="sm" id="ordCourse" title="Change the order courses appear in the dropdown" onClick={core.openOrdCourse}>⇅ Reorder courses</button>
           <div className="msep" />
           <button className="sm" id="delCourse" title="Delete the current course" onClick={core.delCourse}>🗑 Delete course</button>
         </Menu>
@@ -114,6 +115,8 @@ export default function Header() {
 
         <Menu id="view" label="View" title="Ways of looking at the syllabus">
           <button className="sm" id="showAllBtn" title="Show name, crew & prerequisites for every event" onClick={core.openShowAll}>☰ Show All</button>
+          <div className="msep" />
+          <button className="sm" id="ordCrew" title="Change the order crew appear in the dropdown and on every ball" onClick={core.openOrdCrew}>⇅ Reorder crew</button>
         </Menu>
 
         <button className={'sm' + (core.arrangeMode ? ' primary' : '')} id="arrangeBtn" onClick={core.toggleArrange}>{core.arrangeMode ? '✓ Done' : '✎ Edit'}</button>

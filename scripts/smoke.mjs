@@ -727,10 +727,10 @@ ok('the top bar fits on one row at 1440', barRows.h <= barRows.tallest + 4,
 /* Grouping must hide nothing: every action still has to be reachable. Named by
    id, with the menu that now holds it. */
 const MENUS = {
-  '#courseMenuBtn': ['#addCourse', '#renCourse', '#delCourse'],
+  '#courseMenuBtn': ['#addCourse', '#renCourse', '#ordCourse', '#delCourse'],
   '#sylMenuBtn': ['#dupSyl', '#addSyl', '#renSyl', '#ordSyl', '#delSyl'],
   '#fileMenuBtn': ['#openFileBtn', '#importSylBtn', '#saveCopyBtn', '#optCharts', '#optStudents'],
-  '#viewMenuBtn': ['#showAllBtn'],
+  '#viewMenuBtn': ['#showAllBtn', '#ordCrew'],
 };
 const unreachable = [];
 for (const [btn, items] of Object.entries(MENUS)) {
@@ -1313,6 +1313,93 @@ ok('the app still opens with a remembered student who is gone',
    the same ball must show different words after a syllabus switch. */
 /* run from a clean slate — earlier checks leave custom courses and remembered
    positions behind, and this check is about the BAKED data, not that residue */
+await pg.evaluate(() => localStorage.clear());
+await pg.reload({ waitUntil: 'networkidle' });
+await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+
+/* ---- course order, and the crew order that slices every ball ----
+   Runs straight after the clean slate above so the course list is exactly the
+   one shipped default and the expected orders can be stated outright rather
+   than compared against "whatever was there before". */
+{
+  const courses = () => pg.evaluate(() => [...document.querySelectorAll('#courseSel option')].map(o => o.value));
+  /* Expectations are written out in full rather than derived from what the app
+     just did. Deriving them is how a reorder check ends up comparing broken
+     output against itself and reporting "wanted SMOKE FIRST | SMOKE FIRST". */
+  const base = await courses();
+  ok('these checks start from the single shipped course',
+    JSON.stringify(base) === JSON.stringify(['26ABSG']), base.join(' | '));
+  await viaMenu('course', '#addCourse'); await pg.waitForTimeout(250);
+  await pg.fill('#dlgInput', 'SMOKE FIRST'); await pg.click('#dlgOk'); await pg.waitForTimeout(900);
+  const withNew = await courses();
+  /* Named position, not "is present": push put it last, and a check that only
+     asked whether it existed would have passed against the old code. */
+  ok('a new course is added at the TOP of the list',
+    JSON.stringify(withNew) === JSON.stringify(['SMOKE FIRST', '26ABSG']), withNew.join(' | '));
+
+  /* Reorder it back down and state the whole expected array. */
+  await viaMenu('course', '#ordCourse'); await pg.waitForSelector('#ordModal');
+  ok('the reorder modal knows which list it is showing',
+    await pg.getAttribute('#ordModal', 'data-ord') === 'course'
+    && (await pg.textContent('#ordTitle')) === 'Course order');
+  await pg.locator('#ordList .ordrow').first().locator('button[title="Move down"]').click();
+  await pg.click('#ordSave'); await pg.waitForTimeout(700);
+  const moved = await courses();
+  ok('moving a course down reorders the Course dropdown',
+    JSON.stringify(moved) === JSON.stringify(['26ABSG', 'SMOKE FIRST']), moved.join(' | '));
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+  const kept = await courses();
+  ok('the course order survives a reload',
+    JSON.stringify(kept) === JSON.stringify(['26ABSG', 'SMOKE FIRST']), kept.join(' | '));
+
+  /* Crew order. Named course, not "whichever ended up first": the roster lives
+     per course, and picking the reordered one landed this block on the empty
+     new course, where it silently reported a missing roster instead of the
+     thing it was meant to measure.
+     Grade somebody FIRST too: on an ungraded ball every wedge is the same
+     white, so a fill comparison would pass without renderBoard ever being
+     called — the "grading an empty roster is a no-op" trap in another costume. */
+  await pg.selectOption('#courseSel', '26ABSG'); await pg.waitForTimeout(800);
+  const crew = () => pg.evaluate(() => [...document.querySelectorAll('#activeSel option')].map(o => o.value));
+  const roster0 = await crew();
+  if (roster0.length >= 2) {
+    await pg.selectOption('#activeSel', roster0[0]); await pg.waitForTimeout(300);
+    await clickBall('ST-01'); await pg.waitForSelector('#pop');
+    await pg.locator('#pop .opts button', { hasText: 'DCO' }).click();
+    await pg.waitForTimeout(700);
+    await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+    const firstFill = () => pg.evaluate(() => {
+      const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === 'ST-01');
+      const p = g && g.querySelector('path');
+      return p ? p.getAttribute('fill') : null;
+    });
+    const fillBefore = await firstFill();
+    await viaMenu('view', '#ordCrew'); await pg.waitForSelector('#ordModal');
+    ok('the crew list opens in the same modal',
+      await pg.getAttribute('#ordModal', 'data-ord') === 'crew');
+    await pg.locator('#ordList .ordrow').first().locator('button[title="Move down"]').click();
+    await pg.click('#ordSave'); await pg.waitForTimeout(700);
+    const wantCrew = [roster0[1], roster0[0], ...roster0.slice(2)];
+    const gotCrew = await crew();
+    ok('reordering crew reorders the Crew dropdown',
+      JSON.stringify(gotCrew) === JSON.stringify(wantCrew), gotCrew.join(' | '));
+    const fillAfter = await firstFill();
+    /* The slices are cut by roster index, so the board has to be redrawn too —
+       without renderBoard the key re-orders and the balls do not. */
+    ok('reordering crew also re-slices the balls',
+      !!fillBefore && fillBefore !== fillAfter, `first slice ${fillBefore} -> ${fillAfter}`);
+    await pg.reload({ waitUntil: 'networkidle' });
+    await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });
+    ok('the crew order survives a reload',
+      JSON.stringify(await crew()) === JSON.stringify(wantCrew), (await crew()).join(' | '));
+  } else {
+    /* Not a soft skip: an empty roster here means the block measured nothing. */
+    ok('the crew reorder checks have a roster to work with', false, `roster: ${roster0.join(',')}`);
+  }
+}
+
+/* Back to a clean slate: the checks below are about baked data, not this residue. */
 await pg.evaluate(() => localStorage.clear());
 await pg.reload({ waitUntil: 'networkidle' });
 await pg.waitForSelector('#flowSvg .ball', { timeout: 15000 });

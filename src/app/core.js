@@ -2094,14 +2094,41 @@ export async function switchSyllabus(v) {
   clearDirty(); plan.sylName = v; plan.custom = false; await savePlan(); await loadCourse(course);
   refreshCourses(); refreshSyl(); refreshActive(); renderBoard(); renderSide(); setSaveStatus('switched to ' + v, 'ok');
 }
-/* ---------- reorder syllabi (modal is <OrdModal/>) ---------- */
-export let ordOpen = false;
-export function openOrd() { ordOpen = true; notify(); }
-export function closeOrd() { ordOpen = false; notify(); }
+/* ---------- reorder syllabi, courses or crew (modal is <OrdModal/>) ----------
+   One mode variable, so only one list can ever be open and the modal keeps a
+   single stable set of ids. The three openers take no argument on purpose:
+   Header.jsx passes them straight to onClick, so a single openOrd(mode) would
+   silently receive the click event as its mode. */
+export let ordMode = null;               /* null | 'syllabus' | 'course' | 'crew' */
+export function openOrd() { ordMode = 'syllabus'; notify(); }
+export function openOrdCourse() { ordMode = 'course'; notify(); }
+export function openOrdCrew() { ordMode = 'crew'; notify(); }
+export function closeOrd() { ordMode = null; notify(); }
+/* Rank against what actually exists now, the way orderedSylNames does: a
+   teammate can add a course or a student over SharePoint while the modal sits
+   open, and dropping them would delete their work rather than reorder it. */
+function reranked(list, live) {
+  const ranked = list.filter(n => live.includes(n));
+  return [...ranked, ...live.filter(n => !ranked.includes(n))];
+}
 export async function saveOrderList(list) {
   SYL_ORDER = [...list]; await saveSylOrder();
   closeOrd(); refreshSyl();
   setSaveStatus('syllabus order saved', 'ok');
+}
+/* COURSES is itself the display order, so there is no separate ranking key. */
+export async function saveCourseOrder(list) {
+  COURSES = reranked(list, COURSES); await saveCourses();
+  closeOrd(); refreshCourses();
+  setSaveStatus('course order saved', 'ok');
+}
+/* renderBoard is NOT optional: wedge(i,n) slices every ball's ring by roster
+   index, so without it the key re-orders while the balls keep the old
+   assignment until the next grade. */
+export async function saveCrewOrder(list) {
+  roster = reranked(list, roster); await saveRoster();
+  closeOrd(); refreshActive(); renderBoard(); renderSide();
+  setSaveStatus('crew order saved', 'ok');
 }
 export async function restoreHiddenSyl(n) {
   SYL_HIDDEN = SYL_HIDDEN.filter(x => x !== n);
@@ -2117,7 +2144,9 @@ export async function switchCourse(v) {
 }
 export async function addCourse() {
   const v = ((await uiPrompt('New course name (e.g. 26BBSG):')) || '').trim().toUpperCase(); if (!v) return;
-  if (!COURSES.includes(v)) { COURSES.push(v); await saveCourses(); }
+  /* Front, not back: the newest course is the one being set up, so it should be
+     the one the dropdown offers first and the one the app falls back to. */
+  if (!COURSES.includes(v)) { COURSES.unshift(v); await saveCourses(); }
   const chosen = curSyl(); const useName = allSylNames().indexOf(chosen) >= 0 ? chosen : firstSylName();
   await sSet(kPlan(v), JSON.stringify({ lulls: [], mode: 'pace', epw: 2, target: null, sylName: useName, custom: false }));
   for (const sn of allSylNames()) await sSet(kRosterFor(v, sn), JSON.stringify([]));
