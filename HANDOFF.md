@@ -131,13 +131,12 @@ partial cause (the dot never lit after marking).
   supersede the map pins). Tx 2026 mirrors those edits (`TX_MIRROR`), except `SA-5`, which
   keeps the doc-stated `[SA-4, SA(S)-6, SA(S)-7]`. One edit they recalled the same day:
   `ST-10` feeds `LASDT(S)-1` again, as the map draws it.
-- **`Tx 2026 v2` is the short course the user actually wants to look at** — their 2026
-  chart replicated (positions, drawn lines, wires) minus the ten events Tx cuts, links
-  bridged as in `Tx 2026`. A NEW name deliberately: **the user's stored charts shadow baked
-  ones of the same name** (the ✎ in their picker), so re-baking `Tx 2026` was invisible to
-  them. Their old `Tx 2026` still exists; retiring it is their call. Six long and three
-  upward arrows are recorded in the span/backwards baselines — Tx-only links crossing a
-  layout drawn for 2026. `V2_REMOVED` in `smoke.mjs` lists the ten cut events.
+- **`Tx 2026` IS the 2026 replica now.** Built 8 Aug as `Tx 2026 v2` (fresh name because
+  **stored charts shadow baked ones of the same name** — the ✎ in the picker); on 9 Aug
+  the user deleted the old Tx in the app, renamed v2 to `Tx 2026`, and the baked data
+  follows: old chart gone, v2 name retired everywhere (pinned). `V2_REMOVED` lists the ten
+  cut events; `USER_TX_EDITS` their own Tx wiring. The DAAR/NAAR refresher tail is
+  deliberately detached from `ST-18` on both 2026 charts — `NAAR-2` is a second loose end.
 - **Detail bubbles are per-syllabus now.** `EVENT_INFO_BY_SYL['Tx 2026']` carries the
   renumbered profiles (Tx `BFM-5` = BCTM `BFM-7`, `SA-5` = `SA-6` crew-solo, `TI-2` =
   8-ship `TI-3`, `LASDT-2` = `LASDT-3`, `TR-5(P)` = IRT `UP / IRE`), merged in `infoFor`

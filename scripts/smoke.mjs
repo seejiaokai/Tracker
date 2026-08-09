@@ -1292,7 +1292,10 @@ const USER_EDITS_2026 = {
   'SA-2': ['SA-1'], 'SA-3': ['SA-2'],
   'DAAR-1': ['INT(S)-2', 'TR-4'],
   'NAAR-1': ['DAAR-2', 'NTR-2'],
-  'ST-18': ['NAAR-2', 'SAT-2', 'SATN-1'],
+  /* 9 Aug: refresher tail detached from ST-18 (NAAR-2 now hangs by design),
+     and SATN-1 takes SA-6 — which is what the document's own table says. */
+  'ST-18': ['SAT-2', 'SATN-1'],
+  'SATN-1': ['NTR-2', 'SA-6', 'SAN-1', 'SAT(S)-1'],
 };
 {
   const byu = Object.fromEntries(SYLLABI['2026'].map(e => [e.id, e]));
@@ -1422,7 +1425,7 @@ const TX_REFRESHER = {
   'DAAR-2': ['DAAR-1'],
   'NAAR-1': ['DAAR-2', 'NTR-2'],
   'NAAR-2': ['NAAR-1'],
-  'ST-18': ['SAT-1', 'SATN-1', 'NAAR-2'],
+  'ST-18': ['SAT-1', 'SATN-1'], /* 9 Aug: tail detached */
 };
 const txRefWrong = Object.entries(TX_REFRESHER).filter(([id, want]) =>
   JSON.stringify((txById[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
@@ -1498,7 +1501,7 @@ const TX_MIRROR = {
   'ACM-3': ['ACM-2'],
   'LASDT(S)-1': ['AAM-09', 'INT(S)-4', 'OPS-05', 'ST-10'],
   'SA-2': ['SA-1'], 'SA-3': ['SA-2'],
-  'SA-5': ['SA(S)-6', 'SA(S)-7', 'SA-4'],
+  /* SA-5 moved to USER_TX_EDITS on 9 Aug: the user dropped the SA(S)-6 link */
 };
 const txMirrorWrong = Object.entries(TX_MIRROR).filter(([id, want]) =>
   JSON.stringify((txById[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
@@ -1535,56 +1538,49 @@ ok('Tx overrides never invent an event the syllabus lacks', (() => {
   return Object.keys(txOv).every(id => ids.has(id));
 })(), Object.keys(txOv).filter(id => !SYLLABI['Tx 2026'].some(e => e.id === id)).join(', '));
 
-/* ---- Tx 2026 v2: the 2026 chart replicated for the short course ----
-   Built at the user's request, 8 Aug: their 2026 — positions, drawn lines and
-   all — minus the ten events the short course does not fly, links bridged the
-   same way Tx 2026 has them. A NEW name on purpose: the user's stored charts
-   shadow baked ones of the same name, so a fresh name is visible immediately. */
+/* ---- Tx 2026 IS the 2026 chart replicated for the short course ----
+   Built 8 Aug as "Tx 2026 v2" (a fresh name, because the user's stored charts
+   shadow baked ones of the same name); on 9 Aug the user deleted the old
+   Tx 2026 in the app and renamed v2 to Tx 2026, and the baked data follows.
+   It is their 2026 — positions, drawn lines and all — minus the ten events the
+   short course does not fly, links bridged, refined by hand since. */
 const V2_REMOVED = ['TR-6(P)', 'BFM-6', 'BFM-7', 'LASDT-3', 'TI-3',
   'DCA(S)-1', 'DCA-1', 'SA-6', 'SAT(S)-2', 'SAT-2'];
 {
-  const v2 = SYLLABI['Tx 2026 v2'] || []; /* [] keeps the block failing loudly, not crashing */
-  ok('Tx 2026 v2 exists and is ordered like 2026', v2.length === 200
-    && v2.every((e, i) => e.seq === i), `${v2.length} events`);
+  const tx = SYLLABI['Tx 2026'] || [];
   const ids26 = SYLLABI['2026'].map(e => e.id).filter(id => !V2_REMOVED.includes(id));
-  ok('v2 is the 2026 event list minus the ten the short course cuts',
-    JSON.stringify(v2.map(e => e.id).sort()) === JSON.stringify(ids26.sort()),
-    `v2=${v2.length} expected=${ids26.length}`);
-  /* The user is refining v2 by hand in the app (8 Aug, work in progress —
-     merged from their saved file). These links deliberately differ from
-     Tx 2026; everything else must still agree.
-     Their file also cut SA-1 down to [TI-2] — orphaning ST-17, JMP-04 and
-     OPS-07 — and dropped AHC-1's INT(S)-1, which every source keeps. They
-     reported both as errors the same day; both were reconnected. */
-  const V2_USER_EDITS = {
+  ok('Tx 2026 is the 2026 event list minus the ten the short course cuts',
+    JSON.stringify(tx.map(e => e.id).sort()) === JSON.stringify(ids26.sort()),
+    `tx=${tx.length} expected=${ids26.length}`);
+  /* The user's own Tx wiring, where it deliberately differs from mirroring
+     2026 across the removals. Each pinned exactly, from their 9 Aug file. */
+  const USER_TX_EDITS = {
     'TR-4': ['EPE', 'TR-3'],
     'TR-5(P)': ['AAS-04', 'IEPE/IPC', 'TR-4'],
     'TI-1': ['ACM-3', 'TI(S)-2', 'TI(S)-3'],   /* both sims: it flies TI-1+TI-2 content */
     'SA(S)-1': ['AGW-01', 'ST-13', 'TI(S)-3'], /* TI(S)-3 stands in for the cut DCA(S)-1 */
+    'SA-5': ['SA(S)-7', 'SA-4'],               /* 9 Aug: SA(S)-6 link dropped */
+    'NTR(S)-1': ['AGS-08', 'NVG-LAB', 'ST-14'],/* 9 Aug: SA-5 link dropped */
   };
-  const linkDiff = v2.filter(e => {
-    const want = V2_USER_EDITS[e.id] || (txById[e.id]?.prereqs || []);
-    return JSON.stringify([...e.prereqs].sort()) !== JSON.stringify([...want].sort());
-  });
-  ok('v2 links agree with Tx 2026 apart from the user\'s own edits', linkDiff.length === 0,
-    linkDiff.slice(0, 4).map(e => `${e.id}=[${e.prereqs.join(',')}]`).join(' | '));
-  const layV2 = LAYOUTS_FOR_LINES['Tx 2026 v2'] || {};
-  /* The layout started as an exact copy of 2026's and is now the user's to
-     shape, so only coverage is pinned: every event has a place. */
-  const unplaced = v2.filter(e => typeof layV2[e.id]?.x !== 'number');
-  ok('every v2 event has a place on the chart', unplaced.length === 0,
+  const wrongTx = Object.entries(USER_TX_EDITS).filter(([id, want]) =>
+    JSON.stringify((txById[id]?.prereqs || []).slice().sort()) !== JSON.stringify([...want].sort()));
+  ok('the user\'s own Tx wiring holds', wrongTx.length === 0,
+    wrongTx.map(([id]) => `${id}=[${(txById[id]?.prereqs || []).join(',')}]`).join(' | '));
+  const layTx = LAYOUTS_FOR_LINES['Tx 2026'] || {};
+  const unplaced = tx.filter(e => typeof layTx[e.id]?.x !== 'number');
+  ok('every Tx event has a place on the chart', unplaced.length === 0,
     unplaced.slice(0, 5).map(e => e.id).join(', '));
-  ok('v2 leaves no position behind for a removed event',
-    V2_REMOVED.every(id => !layV2[id]), V2_REMOVED.filter(id => layV2[id]).join(', '));
-  ok('v2 carries the 2026 drawn lines', (layV2.__lines || []).length >= 50,
-    `${(layV2.__lines || []).length} lines`);
-  ok('no v2 drawn line anchors to a removed event', (layV2.__lines || []).every(l =>
-    [l.a, l.b].every(a => !a || a.t !== 'ball' || v2.some(e => e.id === a.id))));
-  ok('v2 uses the same short-course sortie profiles as Tx 2026',
-    EVENT_INFO_BY_SYL['Tx 2026 v2'] && JSON.stringify(EVENT_INFO_BY_SYL['Tx 2026 v2'])
-      === JSON.stringify(EVENT_INFO_BY_SYL['Tx 2026']));
-  ok('v2 sits beside Tx 2026 in the default order',
-    DEFAULT_SYL_ORDER.indexOf('Tx 2026 v2') === DEFAULT_SYL_ORDER.indexOf('Tx 2026') + 1,
+  ok('Tx leaves no position behind for a removed event',
+    V2_REMOVED.every(id => !layTx[id]), V2_REMOVED.filter(id => layTx[id]).join(', '));
+  ok('Tx carries the 2026 drawn lines', (layTx.__lines || []).length >= 50,
+    `${(layTx.__lines || []).length} lines`);
+  ok('no Tx drawn line anchors to a removed event', (layTx.__lines || []).every(l =>
+    [l.a, l.b].every(a => !a || a.t !== 'ball' || tx.some(e => e.id === a.id))));
+  ok('the retired "Tx 2026 v2" name is gone everywhere',
+    !SYLLABI['Tx 2026 v2'] && !LAYOUTS_FOR_LINES['Tx 2026 v2']
+      && !EVENT_INFO_BY_SYL['Tx 2026 v2'] && !DEFAULT_SYL_ORDER.includes('Tx 2026 v2'));
+  ok('the default order is the user\'s five charts',
+    JSON.stringify(DEFAULT_SYL_ORDER) === JSON.stringify(['2024', '2026', 'Tx 2026', 'A/G - A/A 2026', 'Tx 2024']),
     DEFAULT_SYL_ORDER.join(' · '));
 }
 
@@ -1617,7 +1613,7 @@ const REFRESHER_2026 = {
   'DAAR-2': ['DAAR-1'],
   'NAAR-1': ['DAAR-2', 'NTR-2'],
   'NAAR-2': ['NAAR-1'],
-  'ST-18': ['SAT-2', 'SATN-1', 'NAAR-2'],
+  'ST-18': ['SAT-2', 'SATN-1'], /* 9 Aug: tail detached */
 };
 const by26r = Object.fromEntries(SYLLABI['2026'].map(e => [e.id, e]));
 const badRef = Object.entries(REFRESHER_2026).filter(([id, want]) =>
@@ -1697,7 +1693,9 @@ ok('A/G - A/A prereqs match its own course map', wrongAG.length === 0,
    real bridge behind the cut DCA-1, and TI-2 takes TI-1 as it does in 2026. */
 /* v2 is mid-edit: the user's SA-1 trim leaves ST-17, JMP-04 and OPS-07 feeding
    nothing for now. Expected to drop back toward 1 as they finish. */
-const ENDPOINTS = { '2026': 1, 'A/G - A/A 2026': 1, 'Tx 2026': 1, 'Tx 2026 v2': 4, 'Tx 2024': 2, '2024': 6 };
+/* 9 Aug: the user detached the DAAR/NAAR refresher tail from ST-18 on both
+   2026 charts, so NAAR-2 is a second, deliberate loose end. */
+const ENDPOINTS = { '2026': 2, 'A/G - A/A 2026': 1, 'Tx 2026': 2, 'Tx 2024': 2, '2024': 6 };
 const ends = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const used = new Set(syl.flatMap(e => e.prereqs || []));
@@ -1729,11 +1727,11 @@ const SPAN_LIMIT = 1000;
    are the refresher chain, which did exactly the same to 2026 (2 -> 5) — the
    DAAR spine runs the height of the chart by design, as the map draws it. Links
    right, routing ugly; recorded rather than hidden. */
-/* Tx 2026 v2 replicates the 2026 GEOMETRY under the short course's WIRING, so
+/* Tx 2026 replicates the 2026 GEOMETRY under the short course's WIRING, so
    the handful of links Tx has and 2026 does not (LASDT(S)-1->SA(S)-1, the
    AGR-01 correction, the DAAR spine) cross space no wire was drawn for. Links
    right, routing ugly; recorded, and the user can redraw lines in the app. */
-const SPAN_BASELINE = { '2024': 0, '2026': 5, 'Tx 2026': 7, 'Tx 2026 v2': 7, 'A/G - A/A 2026': 10, 'Tx 2024': 3 };
+const SPAN_BASELINE = { '2024': 0, '2026': 5, 'Tx 2026': 7, 'A/G - A/A 2026': 10, 'Tx 2024': 3 };
 const stretched = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const L = DEFAULT_LAYOUTS[name]; if (!L) continue;
@@ -1755,7 +1753,7 @@ ok(`no new arrows longer than ${SPAN_LIMIT}px`, stretched.length === 0, stretche
    2024 it is still open whether the box or the link is the wrong one. */
 /* v2's three upward arrows are Tx-only links pointed at boxes 2026 places
    higher: AAS-04->TR-4, TI(S)-3->TI-1, AAM-14->TI-2. Same story as above. */
-const BACKWARDS_BASELINE = { '2024': 2, '2026': 0, 'Tx 2026': 4, 'Tx 2026 v2': 3, 'A/G - A/A 2026': 0, 'Tx 2024': 4 };
+const BACKWARDS_BASELINE = { '2024': 2, '2026': 0, 'Tx 2026': 3, 'A/G - A/A 2026': 0, 'Tx 2024': 4 };
 const backwards = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const L = DEFAULT_LAYOUTS[name]; if (!L) continue;
