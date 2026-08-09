@@ -13,6 +13,7 @@ import { SEED_STATE, SEED_STAMP } from '../data/seedState.js';
 import { storage, flushNow, loadLatest, cloudButtonClick, setCloudSinks, getCloudCache, cloudCfg } from '../sync/cloud.js';
 import * as FMT from './fileFormat.js';
 import * as FS from './fileStore.js';
+import { findEvents } from './eventOrder.js';
 
 export { SYLLABI, SYL_NAMES, DEFAULT_SYL_NAME, DEFAULT_SYL_ORDER, DEFAULT_LAYOUTS, EVENT_INFO };
 export { cloudButtonClick };
@@ -360,6 +361,9 @@ async function loadCourse(c, restoreLastSyllabus = false) {
   /* One site covers init, switchCourse, addCourse, renCourse and delCourse.
      Raw and synchronous, so unlike sSet it never flickers the save status. */
   prefSet('lastCourse', c);
+  /* A ring left over from another syllabus would re-light the moment the user
+     came back to it. Cleared without redrawing: every caller renders anyway. */
+  searchHit = null; searchQ = ''; searchCount = 0; searchAt = 0;
   const pr = await sGet(kPlan(c)); plan = pr ? JSON.parse(pr) : { lulls: [], mode: 'pace', epw: 2, target: null, sylName: DEFAULT_SYL_NAME, custom: false };
   if (!plan.sylName) plan.sylName = DEFAULT_SYL_NAME;
   const cs = await sGet(kSyls(c)); CUSTOMS = cs ? JSON.parse(cs) : {};
@@ -589,6 +593,10 @@ function ballGroup(ev, available) {
   }
   const dark = DARKC.has(ev.type) ? 'lbl' : 'lbl lbll';
   let hl = available ? `<circle cx="${cx}" cy="${cy}" r="${rO + 3}" fill="none" stroke="#ffd23f" stroke-width="2.6" class="avail"/>` : '';
+  /* The search ring sits at rO+8. Its inner edge is 34.06, clear of the yellow
+     available ring's outer edge even when svg.perf fattens that to 31.96, so
+     the two can never touch or be read as one mark. */
+  if (searchHit === ev.id) hl += `<circle cx="${cx}" cy="${cy}" r="${rO + 8}" fill="none" stroke="#00e5c8" stroke-width="2.4" class="found"/>`;
   if (arrangeMode && connectSrc === ev.id) hl += `<circle cx="${cx}" cy="${cy}" r="${rO + 5}" fill="none" stroke="#36c2ff" stroke-width="3"/>`;
   if (arrangeMode && selBalls.has(ev.id)) hl += `<circle cx="${cx}" cy="${cy}" r="${rO + 5}" fill="none" stroke="#36c2ff" stroke-width="1.6" stroke-dasharray="3 2"/>`;
   const num = (ev.num != null && ev.num !== '') ? `<circle cx="${size - 5}" cy="5" r="8.5" class="numbg"/><text class="numbadge" x="${size - 5}" y="8" text-anchor="middle">${escapeId(ev.num)}</text>` : '';
@@ -1931,6 +1939,44 @@ export function scrollToEvent(id) {
   bd.scrollTop += (r.top + r.height / 2) - (b.top + b.height / 2);
   bd.scrollLeft += (r.left + r.width / 2) - (b.left + b.width / 2);
   return true;
+}
+/* ---------- find an event on the board ----------
+   The ring is baked into the SVG string, so changing the hit means redrawing
+   the board, not just notifying React. */
+export let searchHit = null, searchQ = '', searchCount = 0, searchAt = 0;
+/* App.jsx owns the phone's Flow/Info tab. Searching from the Info tab would
+   measure a display:none board and scroll to nowhere, so the search switches
+   back first — same sink arrangement as setCloudSinks. */
+let tabSink = null;
+export function setTabSink(fn) { tabSink = fn; }
+function jumpTo(id) {
+  searchHit = id || null;
+  if (id && tabSink) { try { tabSink('flow'); } catch (_) {} }
+  renderBoard();
+  if (!id) return false;
+  /* After the frame, so the balls exist and applyFlowZoom's scale has landed —
+     measuring in the same tick reads a stale one. Same reason init() defers. */
+  if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => scrollToEvent(id));
+  else scrollToEvent(id);
+  return true;
+}
+export function runSearch(q, step) {
+  searchQ = q == null ? '' : q;
+  const hits = findEvents(SYL, searchQ);
+  searchCount = hits.length;
+  if (!hits.length) {
+    /* A search that finds nothing is not "another search": the board stays put
+       and whatever was ringed stays ringed. */
+    searchAt = 0; notify(); return false;
+  }
+  searchAt = step ? ((searchAt + 1) % hits.length) : 0;
+  const done = jumpTo(hits[searchAt].id);
+  notify(); return done;
+}
+export function clearSearch() {
+  searchQ = ''; searchCount = 0; searchAt = 0;
+  if (searchHit) { searchHit = null; renderBoard(); }
+  notify();
 }
 /* Only when the record belongs to the syllabus on screen. Switching syllabus
    under the user to chase a mark would be a surprise, and would prompt about

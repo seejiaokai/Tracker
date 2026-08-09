@@ -336,6 +336,27 @@ ok('the page is a secure context, which the file pickers require', fsCaps.secure
   ok('a word that is no code still searches the whole row',
     EO.filterEvents(evs, 'briefing', txt).length === evs.length);
   ok('an empty filter keeps everything', EO.filterEvents(evs, '   ', txt).length === evs.length);
+
+  /* Jump-to-event matching. Labels are the whole point: seven balls print
+     something other than their id, so anyone searching for what they can see
+     on the chart is typing a label, and id-only matching misses them. */
+  const fe = [
+    { id: 'ST-01' }, { id: 'ST-10' }, { id: 'AVI-12', label: 'AVI-12A/B' },
+    { id: 'NAAR', label: 'NAAR-1' }, { id: 'IEPE/IPC', label: 'IEPE' },
+  ];
+  const ids = q => EO.findEvents(fe, q).map(e => e.id).join(',');
+  ok('an exact code wins outright', ids('ST-01') === 'ST-01', ids('ST-01'));
+  ok('the words printed on a ball are searchable, not just its code',
+    ids('AVI-12A/B') === 'AVI-12' && ids('NAAR-1') === 'NAAR' && ids('IEPE') === 'IEPE/IPC',
+    `${ids('AVI-12A/B')} | ${ids('NAAR-1')} | ${ids('IEPE')}`);
+  ok('a code that starts several returns all of them, first one first',
+    ids('ST') === 'ST-01,ST-10', ids('ST'));
+  /* "AVI-12" is BOTH an exact id and a label prefix — the exact id has to win,
+     or typing a full code would offer two answers and jump to neither. */
+  ok('an exact code beats a label that merely starts with it',
+    ids('AVI-12') === 'AVI-12', ids('AVI-12'));
+  ok('nothing matching returns nothing', EO.findEvents(fe, 'ZZZZ').length === 0);
+  ok('an empty search finds nothing rather than everything', EO.findEvents(fe, '  ').length === 0);
 }
 
 const FFNAME = await import('../src/app/fileFormat.js');
@@ -724,6 +745,13 @@ const barRows = await pg.evaluate(() => {
 ok('the top bar fits on one row at 1440', barRows.h <= barRows.tallest + 4,
   `${barRows.h}px tall, tallest control ${barRows.tallest}px, ${barRows.n} groups`);
 
+/* The check above measures .controls alone, so it stayed green while the HEADER
+   wrapped the title onto its own row and took 44px of chart with it — which is
+   exactly what adding the search box did. Measure the whole header. */
+const hdrH = await pg.evaluate(() => Math.round(document.querySelector('header').getBoundingClientRect().height));
+ok('the whole header stays one row at 1440, title included',
+  hdrH <= barRows.tallest + 24, `header ${hdrH}px, tallest control ${barRows.tallest}px`);
+
 /* ---- Crew leads the bar ----
    It is the control that gets changed first every session and it used to sit
    fifth, wedged between the Syllabus and File menus. */
@@ -743,6 +771,125 @@ ok('the picker is labelled Crew, not Marking as',
   crewFirst.words.includes('Crew') && !crewFirst.words.includes('Marking as'));
 ok('View sits right after Crew',
   crewFirst.ids.indexOf('viewMenuBtn') === 1, crewFirst.ids.slice(0, 3).join(' → '));
+
+/* ---- finding one ball on a 210-event chart ---- */
+{
+  /* Reload first. Switching syllabus with flow edits outstanding raises the
+     discard prompt, which swallowed the switch AND left the app dirty for the
+     Save-changes checks further down. A reload starts clean and costs a second.
+     Then pin the tallest chart on offer: earlier checks leave a five-event
+     import selected, and nothing can scroll on a chart shorter than the screen
+     — the first version of this "passed" with the board at 0 throughout and
+     the target already on screen. */
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForSelector('#flowSvg .ball');
+  {
+    const opts = await pg.evaluate(() => [...document.querySelectorAll('#sylSel option')].map(o => o.value));
+    let best = null, bestN = -1;
+    for (const o of opts) {
+      await pg.selectOption('#sylSel', o); await pg.waitForTimeout(400);
+      const n = await pg.locator('#flowSvg .ball').count();
+      if (n > bestN) { bestN = n; best = o; }
+    }
+    await pg.selectOption('#sylSel', best); await pg.waitForTimeout(800);
+  }
+  /* Park at the BOTTOM and search for a ball at the top, so the jump has to
+     travel. Reading a scroll position twice without moving in between is how
+     several checks here once measured nothing. */
+  const target = await pg.evaluate(() => {
+    const bd = document.getElementById('board');
+    bd.scrollTop = bd.scrollHeight; bd.scrollLeft = 0;
+    const balls = [...document.querySelectorAll('#flowSvg .ball')];
+    const top = balls.map(g => ({ id: g.dataset.id, y: g.getBoundingClientRect().top }))
+      .sort((a, c) => a.y - c.y)[0];
+    return { id: top.id, top: Math.round(bd.scrollTop),
+      scrollable: bd.scrollHeight > bd.clientHeight * 2 };
+  });
+  ok('the search checks run against a chart taller than the screen',
+    target.scrollable && target.top > 200, `parked at ${target.top}px`);
+  await pg.fill('#hSearch', target.id);
+  await pg.waitForTimeout(600);
+  const found = await pg.evaluate(id => {
+    const bd = document.getElementById('board');
+    const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === id);
+    const r = g.getBoundingClientRect(), b = bd.getBoundingClientRect();
+    const ring = g.querySelector('circle.found');
+    const av = g.querySelector('circle.avail');
+    const num = n => parseFloat(n);
+    return {
+      scrollTop: Math.round(bd.scrollTop),
+      inView: r.top >= b.top - 2 && r.bottom <= b.bottom + 2,
+      rings: document.querySelectorAll('#flowSvg circle.found').length,
+      onTarget: !!ring,
+      rFound: ring ? num(ring.getAttribute('r')) : null,
+      wFound: ring ? num(ring.getAttribute('stroke-width')) : null,
+      rAvail: av ? num(av.getAttribute('r')) : null,
+      wAvail: av ? num(av.getAttribute('stroke-width')) : null,
+      stroke: ring ? ring.getAttribute('stroke') : null,
+    };
+  }, target.id);
+  ok('typing an event code snaps the board to that ball',
+    found.inView && Math.abs(found.scrollTop - target.top) > 200,
+    `${target.id}: scroll ${target.top} -> ${found.scrollTop}, in view ${found.inView}`);
+  ok('exactly one ball is ringed, and it is the one searched for',
+    found.rings === 1 && found.onTarget, `${found.rings} rings`);
+
+  /* Stated as a property of the two radii, not as fixed numbers: this stays
+     true if either ring is restyled, and goes false the moment they touch. */
+  const gap = await pg.evaluate(() => {
+    const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.querySelector('circle.found') && x.querySelector('circle.avail'));
+    if (!g) return null;
+    const f = g.querySelector('circle.found'), a = g.querySelector('circle.avail');
+    const n = (el, at) => parseFloat(el.getAttribute(at));
+    return Math.round(((n(f, 'r') - n(f, 'stroke-width') / 2) - (n(a, 'r') + n(a, 'stroke-width') / 2)) * 100) / 100;
+  });
+  if (gap == null) {
+    /* Force the two onto one ball rather than skipping: an "available" ball is
+       whichever the active student can fly next, which varies by run. */
+    const both = await pg.evaluate(() => {
+      const g = document.querySelector('#flowSvg .ball circle.avail');
+      return g ? g.closest('.ball').dataset.id : null;
+    });
+    if (both) { await pg.fill('#hSearch', both); await pg.waitForTimeout(500); }
+    const gap2 = await pg.evaluate(() => {
+      const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.querySelector('circle.found') && x.querySelector('circle.avail'));
+      if (!g) return null;
+      const f = g.querySelector('circle.found'), a = g.querySelector('circle.avail');
+      const n = (el, at) => parseFloat(el.getAttribute(at));
+      return Math.round(((n(f, 'r') - n(f, 'stroke-width') / 2) - (n(a, 'r') + n(a, 'stroke-width') / 2)) * 100) / 100;
+    });
+    ok('the search ring never touches the yellow available ring', gap2 != null && gap2 > 0.5, `${gap2}px between them`);
+  } else {
+    ok('the search ring never touches the yellow available ring', gap > 0.5, `${gap}px between them`);
+  }
+  /* Both halves: "not the accent blue" alone is true of a ring that does not
+     exist, which is exactly how a missing feature reads. */
+  ok('the search ring is a colour of its own, not the blue that means "selected"',
+    !!found.stroke && found.stroke.toLowerCase() !== '#36c2ff', String(found.stroke));
+
+  /* A search that finds nothing must not move the board or drop the mark. */
+  const before = await pg.evaluate(() => Math.round(document.getElementById('board').scrollTop));
+  await pg.fill('#hSearch', 'ZZZZ'); await pg.waitForTimeout(500);
+  const miss = await pg.evaluate(() => ({
+    scrollTop: Math.round(document.getElementById('board').scrollTop),
+    rings: document.querySelectorAll('#flowSvg circle.found').length,
+    stat: (document.getElementById('hSearchStat') || {}).textContent,
+  }));
+  ok('a search that finds nothing leaves the board and the mark alone',
+    miss.scrollTop === before && miss.rings === 1 && /no match/.test(miss.stat || ''),
+    `scroll ${before} -> ${miss.scrollTop}, ${miss.rings} rings, "${miss.stat}"`);
+
+  await pg.click('#hSearchClear'); await pg.waitForTimeout(400);
+  ok('clearing the box takes the ring off',
+    await pg.evaluate(() => document.querySelectorAll('#flowSvg circle.found').length) === 0);
+
+  /* Hand the bar back clean. Switching syllabus writes the plan, which marks
+     the file unsaved, and the Save-changes checks below are about a bar with
+     nothing to save. */
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForSelector('#flowSvg .ball');
+  await pg.waitForTimeout(300);
+}
 
 /* Grouping must hide nothing: every action still has to be reachable. Named by
    id, with the menu that now holds it. */
@@ -915,6 +1062,32 @@ const phoneCrew = await pg.evaluate(() => {
 ok('on a phone Crew is the leftmost control, reachable without scrolling the bar',
   phoneCrew.gap <= 2 && phoneCrew.inView && phoneCrew.crew < phoneCrew.course,
   `${phoneCrew.gap}px from the header's left padding, crew ${phoneCrew.crew}px vs course ${phoneCrew.course}px`);
+
+/* The search box on a phone. A 132px input in a 390px row would leave nothing
+   for anything else, so it hides behind 🔍 and opens full width underneath.
+   Hit-tested, not just measured: the menu panels looked perfectly fine by
+   display and box size while every tap landed on the view tabs beneath. */
+{
+  const shut = await pg.evaluate(() => ({
+    inline: Math.round(document.getElementById('hSearch').getBoundingClientRect().width),
+    btn: Math.round(document.getElementById('hSearchBtn').getBoundingClientRect().width),
+  }));
+  ok('on a phone the search box is behind a button, not sitting in the bar',
+    shut.inline === 0 && shut.btn > 0, `input ${shut.inline}px, button ${shut.btn}px`);
+  await pg.click('#hSearchBtn'); await pg.waitForTimeout(400);
+  const open = await pg.evaluate(() => {
+    const i = document.getElementById('hSearch');
+    const r = i.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    const hdr = document.querySelector('header').getBoundingClientRect();
+    return { w: Math.round(r.width), vw: innerWidth, below: r.top >= hdr.bottom - 1,
+      hit: hit ? (hit.id || hit.tagName) : 'none' };
+  });
+  ok('tapping the magnifier opens a box that fills the width and can be typed in',
+    open.w >= open.vw * 0.7 && open.below && open.hit === 'hSearch',
+    `${open.w}px of ${open.vw}px, below the bar ${open.below}, tap hits ${open.hit}`);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+}
 
 /* THE MENUS MUST WORK ON A PHONE. They did not: the phone header scrolls
    sideways, and an overflow container clips its own absolutely positioned

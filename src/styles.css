@@ -28,6 +28,22 @@ header h1{font-size:16px;margin:0;letter-spacing:.5px}
    right. */
 .controls{margin-left:14px;flex:1 1 auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .hspacer{flex:1 1 auto;min-width:0}
+/* The bar had 14px of slack at 1440 and the search box wants 153, so it wrapped
+   onto a second row and took 44px of chart with it. The heading is what gives
+   way: at this width it repeats the Course dropdown sitting two inches to its
+   right, and the event count it carries is also in the side panel. Above
+   1600px there is room for both and it comes back. */
+@media(max-width:1600px){ header>div:first-child{display:none} .controls{margin-left:0} }
+/* Desktop: the box is simply in the bar and the 🔍 button is not needed. */
+.findwrap{position:relative;display:inline-flex}
+.findpanel{display:inline-flex;align-items:center;gap:5px}
+#hSearch{width:112px;padding:4px 8px;font-size:12px}
+#hSearchBtn{display:none}
+#hSearchClear{padding:3px 6px}
+/* No reserved width: the bar has to hold Save changes as well, and 52px of
+   permanently blank space was enough to tip it onto a second row at 1440 the
+   moment Save appeared. It only takes room while it has something to say. */
+.findstat{font-size:11px;color:var(--muted);white-space:nowrap}
 select,button,input{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:6px 9px;font-size:12.5px}
 button{cursor:pointer}button:hover{border-color:var(--accent)}
 button.primary{background:#16384a;border-color:var(--accent)}
@@ -126,10 +142,15 @@ button.sm{padding:3px 7px;font-size:11px}
 svg.perf{shape-rendering:optimizeSpeed;text-rendering:optimizeSpeed}
 svg.perf #viewport{will-change:transform}
 svg.perf .avail{filter:none;stroke-width:3.4}
+svg.perf .found{filter:none;stroke-width:3.2}
 svg.perf .ball:hover{filter:none}
 svg.perf .edgehit{pointer-events:none}
 #flowSvg.arrange{touch-action:none}
 .avail{filter:drop-shadow(0 0 5px #ffd23f)}
+/* The searched ball. Turquoise rather than the accent blue #36c2ff, which
+   already means "selected" while editing, and it carries a glow those rings do
+   not — two ways to tell them apart, not one. */
+.found{filter:drop-shadow(0 0 6px #00e5c8)}
 .flowwrap{min-width:max-content}
 #flowSvg.arrange .ball{cursor:grab}#flowSvg.arrange .ball:active{cursor:grabbing}
 .numbadge{font:700 9px Arial;fill:#fff}.numbg{fill:#11141a;stroke:#5a6172;stroke-width:0.8}
@@ -360,6 +381,17 @@ small.hint{color:var(--muted);font-size:11px}
  /* Collapses .hspacer to nothing as well, so the one scrolling row stays
     packed and Crew sits hard against the left edge. */
  .controls>*{flex:0 0 auto}
+ /* A 132px box in a 390px row leaves nothing for anything else, so the phone
+    gets a 🔍 button and a full-width strip under the bar. position:fixed, not
+    absolute: the header scrolls sideways, and an overflow container clips its
+    own absolutely positioned children — the exact fault that made every menu
+    panel untappable. left/right rather than a width, so it cannot be wrong. */
+ #hSearchBtn{display:inline-flex}
+ .findpanel{position:fixed;left:6px;right:6px;z-index:52;display:none;gap:6px;
+   background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:6px 8px;
+   box-shadow:0 8px 26px rgba(0,0,0,.5)}
+ .findpanel.on{display:flex}
+ #hSearch{flex:1 1 auto;min-width:0;width:auto}
  .saveslot{min-width:0}
  .legend{display:none}
 }

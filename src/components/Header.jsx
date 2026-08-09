@@ -53,6 +53,57 @@ function Menu({ id, label, title, children }) {
   );
 }
 
+/* Find one ball on a 210-event chart. On a phone the bar is one row that
+   scrolls sideways, so the box hides behind a 🔍 button and opens as a
+   full-width strip underneath — position:fixed and placed by hand for the same
+   reason the menu panels are: an overflow container clips its own absolutely
+   positioned children, so an absolute strip is drawn and then cut off at the
+   41px header. */
+function HeaderSearch() {
+  const [open, setOpen] = useState(false);
+  const [at, setAt] = useState(null);
+  const wrap = useRef(null), input = useRef(null);
+  useLayoutEffect(() => {
+    if (!open) { setAt(null); return; }
+    const place = () => {
+      const h = document.querySelector('header');
+      setAt({ top: Math.round(h ? h.getBoundingClientRect().bottom + 4 : 44) });
+    };
+    place();
+    addEventListener('resize', place);
+    addEventListener('scroll', place, true);
+    return () => { removeEventListener('resize', place); removeEventListener('scroll', place, true); };
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const away = e => { if (wrap.current && !wrap.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', away);
+    return () => document.removeEventListener('mousedown', away);
+  }, [open]);
+  const hits = core.searchCount;
+  const stat = !core.searchQ ? '' : (hits === 0 ? 'no match' : (hits === 1 ? '1 match' : `${core.searchAt + 1} of ${hits}`));
+  return (
+    <span className="findwrap" ref={wrap}>
+      <button className="sm" id="hSearchBtn" title="Find an event on the chart"
+        onClick={() => { setOpen(o => !o); setTimeout(() => input.current && input.current.focus(), 0); }}>🔍</button>
+      <span className={'findpanel' + (open ? ' on' : '')} id="hSearchPanel"
+        style={at ? { top: at.top + 'px' } : undefined}>
+        <input id="hSearch" ref={input} placeholder="Find event…" value={core.searchQ}
+          onChange={e => core.runSearch(e.target.value, false)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); core.runSearch(core.searchQ, true); }
+            /* Not stopPropagation: Escape still has to reach the app's own
+               handler, it simply clears the box first. */
+            if (e.key === 'Escape') { core.clearSearch(); e.currentTarget.blur(); setOpen(false); }
+          }} />
+        <button className="sm" id="hSearchClear" title="Clear the search"
+          onClick={() => { core.clearSearch(); if (input.current) input.current.focus(); }}>✕</button>
+        <span className="findstat" id="hSearchStat">{stat}</span>
+      </span>
+    </span>
+  );
+}
+
 export default function Header() {
   const sylNames = core.ready ? core.orderedSylNames() : [];
   const sylValue = (core.plan && core.plan.sylName) || core.DEFAULT_SYL_NAME;
@@ -82,6 +133,7 @@ export default function Header() {
           <div className="msep" />
           <button className="sm" id="ordCrew" title="Change the order crew appear in the dropdown and on every ball" onClick={core.openOrdCrew}>⇅ Reorder crew</button>
         </Menu>
+        <HeaderSearch />
         {/* A real element, not margin-left:auto on the next control: with a
             wrapping bar an auto margin applies per flex line, so the right-hand
             group's alignment would depend on where it happened to wrap. */}

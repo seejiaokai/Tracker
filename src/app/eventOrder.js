@@ -57,3 +57,34 @@ export function filterEvents(events, query, textOf) {
   if (byPrefix.length) return byPrefix;
   return (events || []).filter(e => String(textOf ? textOf(e) : e.id).toLowerCase().includes(q));
 }
+
+/* Jump to one event by what the user typed. Separate from filterEvents on
+   purpose: that one feeds a list and Show All depends on its "prefix on id
+   wins outright" contract, while this needs a single best answer plus a count.
+ *
+ * It reads ev.label as well as ev.id because the ball prints `label || id`, and
+ * seven of them differ — AVI-12 prints AVI-12A/B, IEPE/IPC prints IEPE, NAAR
+ * prints NAAR-1. Someone hunting for what they can see on the chart is typing
+ * the label, so matching on id alone misses exactly those.
+ *
+ * Returns every match in order so the caller can jump to the first and let
+ * Enter walk the rest. */
+export function findEvents(events, query) {
+  const q = String(query == null ? '' : query).trim().toLowerCase();
+  if (!q) return [];
+  const list = events || [];
+  const id = e => String(e.id == null ? '' : e.id).toLowerCase();
+  const lab = e => String(e.label == null ? '' : e.label).toLowerCase();
+  const tiers = [
+    e => id(e) === q,
+    e => lab(e) === q,
+    e => id(e).startsWith(q),
+    e => lab(e).startsWith(q),
+    e => id(e).includes(q) || lab(e).includes(q),
+  ];
+  for (const t of tiers) {
+    const hit = list.filter(t);
+    if (hit.length) return hit;
+  }
+  return [];
+}
