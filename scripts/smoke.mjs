@@ -1692,7 +1692,7 @@ ok('Tx SA-1 bridges to TI-2, not LASDT-2', (() => {
    track sheet, i.e. the short course does not fly it, so SAT(S)-1 is the sim that
    applies — which is also the one Tx's SATN-1 names. */
 const TX_SAT1 = ['SA-5', 'SAT(S)-1'];
-const txSat1Wrong = ['Tx 2026', 'Tx 2024'].filter(name =>
+const txSat1Wrong = ['Tx 2026'].filter(name =>
   JSON.stringify(((SYLLABI[name].find(e => e.id === 'SAT-1') || {}).prereqs || []).slice().sort())
     !== JSON.stringify(TX_SAT1));
 ok('SAT-1 waits for SA-5 as well as its sim, on both Tx courses', txSat1Wrong.length === 0,
@@ -1812,8 +1812,8 @@ const V2_REMOVED = ['TR-6(P)', 'BFM-6', 'BFM-7', 'LASDT-3', 'TI-3',
   ok('the retired "Tx 2026 v2" name is gone everywhere',
     !SYLLABI['Tx 2026 v2'] && !LAYOUTS_FOR_LINES['Tx 2026 v2']
       && !EVENT_INFO_BY_SYL['Tx 2026 v2'] && !DEFAULT_SYL_ORDER.includes('Tx 2026 v2'));
-  ok('the default order is the user\'s five charts',
-    JSON.stringify(DEFAULT_SYL_ORDER) === JSON.stringify(['2024', '2026', 'Tx 2026', 'A/G - A/A 2026', 'Tx 2024']),
+  ok('the default order is the user\'s four charts',
+    JSON.stringify(DEFAULT_SYL_ORDER) === JSON.stringify(['2024', '2026', 'Tx 2026', 'A/G - A/A 2026']),
     DEFAULT_SYL_ORDER.join(' · '));
 }
 
@@ -1966,7 +1966,23 @@ ok('A/G - A/A prereqs match its own course map', wrongAG.length === 0,
    nothing for now. Expected to drop back toward 1 as they finish. */
 /* 9 Aug: the user detached the DAAR/NAAR refresher tail from ST-18 on both
    2026 charts, so NAAR-2 is a second, deliberate loose end. */
-const ENDPOINTS = { '2026': 2, 'A/G - A/A 2026': 2, 'Tx 2026': 2, 'Tx 2024': 2, '2024': 6 };
+/* Tx 2024 was deleted at the user's request, 9 Aug. It lived in three places
+   (SYLLABI, DEFAULT_LAYOUTS, DEFAULT_SYL_ORDER) and half a deletion would show
+   as an empty chart in the picker rather than an error, so pin all three.
+   The event ids were all shared with other charts, so EVENT_INFO is untouched.
+   Recoverable from git history if it is ever wanted back. */
+{
+  const dead = 'Tx 2024';
+  ok('the deleted Tx 2024 chart is gone from every list',
+    !SYLLABI[dead] && !LAYOUTS_FOR_LINES[dead] && !DEFAULT_SYL_ORDER.includes(dead),
+    [SYLLABI[dead] && 'syllabus', LAYOUTS_FOR_LINES[dead] && 'layout',
+     DEFAULT_SYL_ORDER.includes(dead) && 'order'].filter(Boolean).join(' + ') || 'gone');
+  ok('every chart in the running order still exists',
+    DEFAULT_SYL_ORDER.every(n => SYLLABI[n]),
+    DEFAULT_SYL_ORDER.filter(n => !SYLLABI[n]).join(', '));
+}
+
+const ENDPOINTS = { '2026': 2, 'A/G - A/A 2026': 2, 'Tx 2026': 2, '2024': 6 };
 const ends = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const used = new Set(syl.flatMap(e => e.prereqs || []));
@@ -1982,7 +1998,7 @@ ok('each syllabus ends where it should', ends.length === 0, ends.join(' | '));
 const { DEFAULT_LAYOUTS } = await import('../src/data/layouts.js');
 const SPAN_LIMIT = 1000;
 /* Baseline per syllabus, not zero: these long links predate any rebuild and are
-   in the user's own charts. Tx 2026 / Tx 2024 / A/G - A/A 2026 still carry the
+   in the user's own charts. Tx 2026 / A/G - A/A 2026 still carry the
    LASDT->SA links that made 2026 look like spaghetti, so they are worth a look
    too — but changing them is a separate, confirmed-with-the-user job. */
 /* A/G - A/A went 8 -> 10 when the four map-confirmed links were restored: TR-4->DAAR and
@@ -2020,7 +2036,7 @@ const SPAN_ALLOWED = {
     'SA(S)-7->SAN-1',                                /* SS wire      */
   ]),
 };
-const SPAN_BASELINE = { '2024': 0, '2026': 5, 'Tx 2026': 7, 'Tx 2024': 3 };
+const SPAN_BASELINE = { '2024': 0, '2026': 5, 'Tx 2026': 7 };
 const stretched = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const L = DEFAULT_LAYOUTS[name]; if (!L) continue;
@@ -2048,7 +2064,7 @@ ok(`no new arrows longer than ${SPAN_LIMIT}px`, stretched.length === 0, stretche
    2024 it is still open whether the box or the link is the wrong one. */
 /* v2's three upward arrows are Tx-only links pointed at boxes 2026 places
    higher: AAS-04->TR-4, TI(S)-3->TI-1, AAM-14->TI-2. Same story as above. */
-const BACKWARDS_BASELINE = { '2024': 2, '2026': 0, 'Tx 2026': 3, 'A/G - A/A 2026': 0, 'Tx 2024': 4 };
+const BACKWARDS_BASELINE = { '2024': 2, '2026': 0, 'Tx 2026': 3, 'A/G - A/A 2026': 0 };
 const backwards = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const L = DEFAULT_LAYOUTS[name]; if (!L) continue;
