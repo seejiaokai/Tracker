@@ -25,9 +25,9 @@ every bake.
 
 ## Where things stand
 
-`npm run smoke` is **275 checks, green**. Everything through PR #22 is merged. **Run
-`npm run live` and look at the screenshot before anything else** — #20, #21 and #22 changed
-the top bar and a lot of behaviour and have not been eyeballed on the deployed site.
+`npm run smoke` is **275 checks, green**. Everything through PR #22 is merged and checked
+live (9 Aug: new bar, search box, faded next-event chips all present, no console errors).
+**Run `npm run live` and look at the screenshot before anything else.**
 
 **Charts:** `2024 (212) · 2026 (210) · Tx 2026 (200) · A/G - A/A 2026 (211)`.
 **Tx 2024 was deleted 9 Aug at the user's request** — recoverable from git history only.
