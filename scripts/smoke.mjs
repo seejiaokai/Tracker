@@ -660,6 +660,52 @@ await pg.waitForSelector('#flowSvg .ball');
 await pg.selectOption('#sylSel', await pg.evaluate(() =>
   [...document.querySelectorAll('#sylSel option')].find(o => o.textContent.startsWith('2026')).value));
 await pg.waitForTimeout(800);
+/* The A/G - A/A chart mirrors the course map with one long drawn wire (NN) and
+   shared bus rails. Two rendering faults are invisible in the data and only
+   show on screen, so check the drawn paths themselves (found 9 Aug by agents
+   auditing the rendered bands). A fresh browser context, because the fault was
+   precisely that a FIRST visit — no saved chart, baked defaults only — lost
+   the kept-hop list and severed the rails:
+   - an arrow crossing the drawn NN wire must keep its hop arc, or the crossing
+     reads as a junction;
+   - a bus rail must NOT hop over its own risers, or half the bus looks
+     disconnected. */
+{
+  const ctx2 = await b.newContext();
+  const pg2 = await ctx2.newPage();
+  await pg2.goto(URL, { waitUntil: 'networkidle' });
+  await pg2.waitForSelector('#flowSvg .ball');
+  const agVal2 = await pg2.evaluate(() =>
+    [...document.querySelectorAll('#sylSel option')].find(o => o.textContent.trim().startsWith('A/G - A/A 2026'))?.value);
+  if (agVal2 != null) {
+    await pg2.selectOption('#sylSel', agVal2); await pg2.waitForTimeout(900);
+    const hops = await pg2.evaluate(() => {
+      const ds = [...document.querySelectorAll('#flowSvg path')].map(p => p.getAttribute('d') || '');
+      const at = pre => ds.find(d => d.startsWith(pre)) || '';
+      return {
+        overNN: at('M450.0 9523.0'),   /* SA(S)-7 -> SA-5, crosses the NN wire  */
+        /* AVI-06 -> AVI-10: same start as AVI-06 -> IAT-02, so pin the far end too */
+        rail: ds.find(d => d.startsWith('M237.0 1648.0') && d.endsWith('L460.0 1727.0')) || '',
+      };
+    });
+    ok('crossings over the drawn NN wire keep their hop',
+      hops.overNN.includes('A5 5'), hops.overNN.slice(0, 90) || 'path not found');
+    ok('a bus rail is not severed by hops over its own risers',
+      hops.rail !== '' && !hops.rail.includes('A5 5'), hops.rail.slice(0, 90) || 'path not found');
+    /* the wide ST-10 labels ship with a smaller per-ball font; a fresh visit
+       must adopt it or the ring clips the name (same loader gap as the hops) */
+    const fs10 = await pg2.evaluate(() => {
+      const t = document.querySelector('#flowSvg g.ball[data-id="ST-10 ACM"] text');
+      return t ? t.getAttribute('style') : 'ball not found';
+    });
+    ok('shipped per-ball font sizes reach a fresh visitor', /font-size:\s*7px/.test(fs10), fs10);
+  } else {
+    ok('crossings over the drawn NN wire keep their hop', false, 'A/G - A/A 2026 missing from #sylSel');
+    ok('a bus rail is not severed by hops over its own risers', false, 'A/G - A/A 2026 missing from #sylSel');
+  }
+  await ctx2.close();
+}
+
 await pg.setViewportSize({ width: 390, height: 844 });
 await pg.waitForTimeout(900);
 
@@ -1683,6 +1729,34 @@ ok('A/G - A/A carries the four links read off its map', missAG.length === 0,
 ok('A/G - A/A prereqs match its own course map', wrongAG.length === 0,
   wrongAG.map(([id]) => `${id}=[${(byAG[id]?.prereqs || []).join(',')}]`).join(' | '));
 
+/* 9 Aug: the A/G - A/A chart was redrawn to mirror the course map's own pages
+   (B-23..B-32 flipped and stacked, read from the user's screenshots). Pin the
+   shape, not just the links: every event placed, nothing overlapping, the long
+   lettered wires straight, and the drawn NN wire still carrying SA-4 -> NTR-1. */
+{
+  const { DEFAULT_LAYOUTS: DL } = await import('../src/data/layouts.js');
+  const L = DL['A/G - A/A 2026'], sylAG = SYLLABI['A/G - A/A 2026'];
+  const idsAG = sylAG.map(e => e.id);
+  const unplaced = idsAG.filter(id => typeof L?.[id]?.x !== 'number' || typeof L?.[id]?.y !== 'number');
+  ok('A/G - A/A doc layout places every event', unplaced.length === 0, unplaced.join(', '));
+  const overlaps = [];
+  for (let i = 0; i < idsAG.length; i++) for (let j = i + 1; j < idsAG.length; j++) {
+    const a = L[idsAG[i]], b = L[idsAG[j]];
+    if (a && b && Math.abs(a.x - b.x) < 55 && Math.abs(a.y - b.y) < 55) overlaps.push(idsAG[i] + '/' + idsAG[j]);
+  }
+  ok('A/G - A/A doc layout: no two balls overlap', overlaps.length === 0, overlaps.join(', '));
+  ok('A/G - A/A doc layout starts at ST-01', idsAG.every(id => (L[id]?.y ?? -1) >= (L['ST-01']?.y ?? 0)));
+  const simLane = ['SA(S)-1', 'SA(S)-2', 'SA(S)-3', 'SA(S)-4', 'SA(S)-5', 'SA(S)-6', 'SA(S)-7', 'ACM(S)-1'];
+  ok('A/G - A/A sim wire runs straight down one lane',
+    simLane.every(id => L[id] && L[id].x === L['SA(S)-1'].x), simLane.map(id => `${id}@${L[id]?.x}`).join(' '));
+  ok('A/G - A/A H wire is one straight line', L['DAAR'] && L['DAAR/NAAR'] && L['DAAR'].x === L['DAAR/NAAR'].x);
+  const nn = (L.__lines || []).find(l => l?.a?.t === 'edge' && l.a.p === 'SA-4' && l?.b?.t === 'ball' && l.b.id === 'NTR-1');
+  ok('A/G - A/A NN wire is drawn and carries SA-4 -> NTR-1', !!nn);
+  const edgeKeys = new Set(sylAG.flatMap(e => (e.prereqs || []).map(p => p + '▸' + e.id)));
+  const strayMeta = Object.keys(L.__edgeMeta || {}).filter(k => !edgeKeys.has(k));
+  ok('A/G - A/A routing metadata only decorates real links', strayMeta.length === 0, strayMeta.join(', '));
+}
+
 /* Each syllabus should funnel to one final event. A second endpoint means
    something is dangling off the end of the chart, which is how the missing
    B-32 tail showed up: A/G - A/A stopped dead at TI-3. */
@@ -1731,7 +1805,25 @@ const SPAN_LIMIT = 1000;
    the handful of links Tx has and 2026 does not (LASDT(S)-1->SA(S)-1, the
    AGR-01 correction, the DAAR spine) cross space no wire was drawn for. Links
    right, routing ugly; recorded, and the user can redraw lines in the app. */
-const SPAN_BASELINE = { '2024': 0, '2026': 5, 'Tx 2026': 7, 'A/G - A/A 2026': 10, 'Tx 2024': 3 };
+/* 9 Aug: A/G - A/A was rebuilt to mirror the course map's own geometry
+   (pages B-23..B-32 stacked). Its long arrows are now exactly the map's
+   lettered page-spanning wires, so they are pinned BY NAME: a new long arrow
+   fails even if an old one goes away. */
+const SPAN_ALLOWED = {
+  'A/G - A/A 2026': new Set([
+    'OPS-01->OPS-03', 'OPS-01->OPS-04',              /* B wire       */
+    'TR-4->DAAR', 'AAS-04->DAAR', 'INT(S)-2->DAAR',  /* H wire feeds */
+    'DAAR->DAAR/NAAR',                               /* H wire spine */
+    'AAS-04->T-10',                                  /* riser to T-10 */
+    'LASDT(S)-1->SA(S)-1',                           /* J/N wire     */
+    'LASDT-2->SA-1',                                 /* M wire       */
+    'AGW-03->ST-10 ACM',                             /* U wire       */
+    'SA(S)-7->ACM(S)-1',                             /* T wire       */
+    'SA-4->NTR-1',                                   /* NN wire      */
+    'SA(S)-7->SAN-1',                                /* SS wire      */
+  ]),
+};
+const SPAN_BASELINE = { '2024': 0, '2026': 5, 'Tx 2026': 7, 'Tx 2024': 3 };
 const stretched = [];
 for (const [name, syl] of Object.entries(SYLLABI)) {
   const L = DEFAULT_LAYOUTS[name]; if (!L) continue;
@@ -1741,6 +1833,12 @@ for (const [name, syl] of Object.entries(SYLLABI)) {
     if (typeof a?.x !== 'number' || typeof b?.x !== 'number') continue;
     const d = Math.hypot(a.x - b.x, a.y - b.y);
     if (d > SPAN_LIMIT) long.push(`${p}->${e.id} ${Math.round(d)}px`);
+  }
+  const named = SPAN_ALLOWED[name];
+  if (named) {
+    const rogue = long.filter(s => !named.has(s.replace(/ \d+px$/, '')));
+    if (rogue.length) stretched.push(`${name}: ${rogue.length} unpinned (${rogue.slice(0, 3).join(', ')})`);
+    continue;
   }
   const allowed = SPAN_BASELINE[name] ?? 0;
   if (long.length > allowed) stretched.push(`${name}: ${long.length}>${allowed} (${long.slice(0, 3).join(', ')})`);

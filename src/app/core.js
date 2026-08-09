@@ -123,14 +123,17 @@ function setHop(k1, k2, want) {
   else { if (want) unmerges.add(mk); else unmerges.delete(mk); }
 }
 function loadEdgeMeta() {
-  let em = (layout && layout.__edgeMeta), mg = (layout && layout.__merges);
+  let em = (layout && layout.__edgeMeta), mg = (layout && layout.__merges), un = (layout && layout.__unmerges);
   if (!em || !Object.keys(em).length) { /* fall back to the built-in default's routing metadata */
     const dl = DEFAULT_LAYOUTS[curSyl()];
     if (dl && dl.__edgeMeta) em = JSON.parse(JSON.stringify(dl.__edgeMeta));
     if ((!mg || !mg.length) && dl && dl.__merges) mg = JSON.parse(JSON.stringify(dl.__merges));
+    /* kept-hop pairs ship with a default chart too: without this, an arrow
+       crossing a shipped drawn line renders flush and reads as a junction */
+    if ((!un || !un.length) && dl && dl.__unmerges) un = JSON.parse(JSON.stringify(dl.__unmerges));
   }
   edgeMeta = em || {}; merges = new Set(mg || []);
-  unmerges = new Set((layout && layout.__unmerges) || []);
+  unmerges = new Set(un || []);
 }
 function saveEdgeMeta() { layout.__edgeMeta = edgeMeta; layout.__merges = [...merges]; layout.__unmerges = [...unmerges]; }
 function ballFontFor(id) { const f = layout.__font || {}; return f[id] || f.__all || 8.5; }
@@ -189,6 +192,9 @@ function loadLineDefaults() {
     layout.__lines = JSON.parse(JSON.stringify(dl.__lines));
   if (!Array.isArray(layout.__derived) && Array.isArray(dl.__derived))
     layout.__derived = JSON.parse(JSON.stringify(dl.__derived));
+  /* shipped per-ball font sizes (wide labels) must reach a first visit too */
+  if (layout.__font == null && dl.__font)
+    layout.__font = JSON.parse(JSON.stringify(dl.__font));
 }
 async function saveLayout() { saveEdgeMeta(); await sSet(kLayout(), JSON.stringify(layout)); }
 
