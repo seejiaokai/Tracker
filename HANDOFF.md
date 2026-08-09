@@ -14,6 +14,10 @@ two clipped labels. All were obvious in a screenshot and invisible in the data.
 **A check that passes first time has probably measured nothing.** Make every new check fail
 on purpose before believing it. One check this session could NOT be made to fail (every
 event code is zero-padded, so text and number sorting agree) — it was deleted, not kept.
+Four more measured nothing until rewritten: one derived its expected order from the output
+it was testing, one read back an order it had just written in the same page (reload first),
+one scrolled a five-event chart that could not scroll, and one read `#courseSel`, which
+reports its first option when the value names none.
 
 **The repository is public.** `github.com/seejiaokai/Tracker`. No student name, mark or
 date may enter it. Smoke checks enforce this, and `bake-user-charts.mjs` re-checks after
@@ -21,8 +25,9 @@ every bake.
 
 ## Where things stand
 
-`npm run smoke` is **219 checks, green**. Everything through PR #18 is merged and verified
-on the live site. **Run `npm run live` and look at the screenshot before anything else.**
+`npm run smoke` is **275 checks, green**. Everything through PR #22 is merged. **Run
+`npm run live` and look at the screenshot before anything else** — #20, #21 and #22 changed
+the top bar and a lot of behaviour and have not been eyeballed on the deployed site.
 
 **Charts:** `2024 (212) · 2026 (210) · Tx 2026 (200) · A/G - A/A 2026 (211)`.
 **Tx 2024 was deleted 9 Aug at the user's request** — recoverable from git history only.
@@ -36,7 +41,7 @@ re-save. Their word on chart names/order/links is authoritative; mirror it exact
 
 **A/G - A/A redrawn to the course map.** `scripts/gen-agaa-layout.mjs` holds the
 transcription of pages B-23…B-32 (flipped, stacked). The user has since moved 132 boxes and
-drawn 65 lines of their own on top, so **that script is now history, not the source of
+drawn 68 lines of their own on top, so **that script is now history, not the source of
 truth** — do not re-run it, it would throw their work away.
 
 **Show All is grouped by event code.** `src/app/eventOrder.js` (no browser APIs, unit-tested
@@ -53,15 +58,31 @@ syllabus profile + user edits) but `saveInfoFor` compared against the base ALONE
 any row while Tx 2026 was on screen stored Tx's wording as a GLOBAL override. One real save
 of `SA-5` did this and arrived in the user's file; the bake script now drops such entries.
 
+**The bar reorganised, and an event search (#20, #21).** Crew leads the bar, then View, the
+search box, Course and Syllabus; a spacer, then File / Edit / Show All / Details. Type a code
+and the board snaps to that ball and rings it turquoise. Courses and crew reorder by drag
+through the one `#ordModal`. The app reopens on the last course / syllabus / crew member,
+remembered **per browser** under raw `ocuLocal:` keys — deliberately outside the `ocu:`
+prefix `sync/local.js` sweeps into the one shared SharePoint file.
+
+**Eleven faults from the 9 Aug system test (#22).** Four kinds of damaged file used to be
+written to storage and then render a blank page on every load — `fileFormat.js` now checks
+inside both blocks and names what is wrong, and `computeFlow` carries a visited set so a
+looping chart degrades instead of killing the render. `applyStudents` merges courses instead
+of replacing them; Reset layout counts the drawn lines in its prompt and takes an undo
+snapshot; the redo stack is cleared on course and syllabus change; `renCourse` and
+`removeStudent` now move and purge every key they own.
+
 ## Still open, and what to ask
 
-### Five A/G - A/A links the map draws and the user's file does not
+### Two A/G - A/A links the map draws and the user's file does not
 
-`AAS-04` (lost `EPE`), `INT(S)-1` (lost `IAT-07`), `TR-1(P)` (lost `TR(S)-3`), `TR-2` (lost
-`TR(S)-4`), `TR-4` (lost `EPE`). In every case the OTHER feeders of the same bundle survive
-as line-derived links, which is what a redrawn bundle leaves behind — so these look like
-drops, not decisions. Recorded as their file has them in `USER_EDITS_AGAA`, **not endorsed.
-Raised with the user 9 Aug; still unanswered. Restore only on their word.**
+`EPE → AAS-04` and `TR(S)-4 → TR-2`. Five were missing when the redraw came back; the user
+restored three by hand (`IAT-07 → INT(S)-1`, `TR(S)-3 → TR-1(P)`, `EPE → TR-4`), which is
+what says the whole group was dropped by redrawing those bundles rather than chosen. Those
+three are out of `USER_EDITS_AGAA` again, so the map guards them and a future drop fails.
+The remaining two are recorded as their file has them, **not endorsed. Raised 9 Aug; still
+unanswered. Restore only on their word.**
 
 Note the direction of risk: removals let an event unlock EARLY. Additions can only delay.
 
@@ -114,6 +135,9 @@ page says so.
 - **Browser file pickers need a live click.** No `await` before `showSaveFilePicker` /
   `showOpenFilePicker` / `requestPermission`.
 - **Only `applyCharts` may touch charts and only `applyStudents` may touch people.**
+- **Anything remembered per browser goes in `ocuLocal:`, never through `sSet`.** Every `ocu:`
+  key lands in one shared file, so whoever used the app last would decide what opens for
+  everyone. `kLastStudent`/`kLast` stay shared on purpose.
 - **`applyBundle` no longer deletes stored syllabi.** Restoring that would wipe their charts.
 - **Backticks in a `git commit -m` heredoc get eaten.** Write the message to a file, use `-F`.
 - Every PR merge is a squash, so the branch is left behind afterwards; reset it onto
@@ -129,5 +153,5 @@ alone is invisible on their devices. Build a charts-only `ocu-tracker` JSON, ver
 
 ## Testing
 
-`npm run smoke` — 219 checks, green before every commit touching `src/`.
+`npm run smoke` — 275 checks, green before every commit touching `src/`.
 `npm run live` — the deployed site, after the Pages run finishes. Never call a branch "live".
