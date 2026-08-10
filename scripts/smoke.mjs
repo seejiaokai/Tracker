@@ -2118,12 +2118,18 @@ ok('no drawn link claims a prerequisite the syllabus does not have', phantom.len
    saved file on 8 Aug 2026. These deliberately depart from the document and
    SUPERSEDE the map/table pins below wherever they name the same event.
    (Their file also cut ST-10 out of LASDT(S)-1; they called that a mistake
-   the same day, so that one link went back in and is NOT listed here.) */
+   the same day, so that one link went back in and is NOT listed here.)
+
+   10 Aug: ACM-3, SA-2 and SA-3 came off this list the same way. Each had lost
+   the SIM that the map draws before its flight — ACM(S)-2, SA(S)-3, SA(S)-4 —
+   which are the only three places in any chart where a flight did not wait for
+   its simulator, and the opposite of the sim chain the user twice confirmed on
+   A/G - A/A. Raised on that reading; they restored all three by hand. Not
+   listed here any more, so the map governs them again and a future drop fails
+   instead of being excused. */
 const USER_EDITS_2026 = {
   /* 9 Aug: ST-03 put back on AVI-03 and AVI-04, so all three AVI-0x take it. */
   'AVI-03': ['AVI-01', 'ST-03'], 'AVI-04': ['AVI-01', 'ST-03'],
-  'ACM-3': ['ACM-2'],
-  'SA-2': ['SA-1'], 'SA-3': ['SA-2'],
   'DAAR-1': ['INT(S)-2', 'TR-4'],
   'NAAR-1': ['DAAR-2', 'NTR-2'],
   /* 9 Aug: refresher tail detached from ST-18 (NAAR-2 now hangs by design),
@@ -2199,14 +2205,19 @@ ok('no event the map strikes through is still in 2026', revived.length === 0, re
    - the refresher tail, now shaped exactly as 2026's: DAAR -> DAAR-2, a
      separate DAAR/NAAR -> NAAR-2, and ST-18 no longer taking the tail. Asked
      for, and matching what they already did on the other two charts.
-   - two links the map draws that their file still does not carry: EPE -> AAS-04
-     and TR(S)-4 -> TR-2. Five were missing when the redraw first came back; the
-     user restored three of them (IAT-07 -> INT(S)-1, TR(S)-3 -> TR-1(P),
-     EPE -> TR-4) in their next save, which confirms the whole group was dropped
-     by redrawing those bundles rather than chosen. The remaining two are RAISED
-     AND STILL UNANSWERED - recorded as their file has them, not endorsed. Those
-     three are deliberately NOT listed here any more, so the map governs them
-     again and a future drop fails instead of being excused. */
+   - AAS-04 taking nothing. This one is NOT a departure and never was: the map
+     transcription records it under app_keeps_links_this_map_does_not_draw as
+     "app keeps EPE ... neither map nor table shows it", a legacy of the first
+     port, and 2026 and Tx carry no feeder either. The redraw dropped it and all
+     four charts now agree. Pinned here so it stays dropped. It was twice called
+     a missing link the map draws; it is not. Read that map note before saying so
+     again.
+
+   The five links that WERE missing after the redraw are all back. The user
+   restored IAT-07 -> INT(S)-1, TR(S)-3 -> TR-1(P) and EPE -> TR-4 on 9 Aug, and
+   TR(S)-4 -> TR-2 on 10 Aug once the other three charts were shown to carry it;
+   the fifth was AAS-04 above, which needed nothing. None are listed here any
+   more, so the map governs them again and a future drop fails. */
 const USER_EDITS_AGAA = {
   'DAAR': ['INT(S)-2', 'TR-4'],
   'DAAR-2': ['DAAR'],
@@ -2215,7 +2226,6 @@ const USER_EDITS_AGAA = {
   'ST-18': ['SAT-2', 'SATN-1'],
   'SAN-1': ['NTR-1', 'SA(S)-7'],
   'AAS-04': [],
-  'TR-2': ['TR-1(P)'],
 };
 {
   const bya = Object.fromEntries(SYLLABI['A/G - A/A 2026'].map(e => [e.id, e]));
@@ -2355,9 +2365,8 @@ ok('2024 still carries them, being the older course',
    Tx flying module still requires it for SA-2 and SA-3. The user chose to keep it,
    8 Aug, having confirmed the SA(S)-2..-5 chain twice before. Pinned so the
    unnumbered row does not get "corrected" into a deletion later. Re-confirmed by
-   the user on 8 Aug during the Tx rebuild. Since their own 2026 edit removed the
-   SA(S)-3 link to the flights, it now lives inside the sim chain only: SA(S)-4
-   waits for it, no flight does. */
+   the user on 8 Aug during the Tx rebuild. It sits in the sim chain (SA(S)-4
+   waits for it) and, since 10 Aug, feeds SA-2 again on every chart. */
 ok('Tx keeps SA(S)-3 inside the sim chain', (() => {
   const has = SYLLABI['Tx 2026'].some(e => e.id === 'SA(S)-3');
   return has && (txById['SA(S)-4']?.prereqs || []).includes('SA(S)-3');
@@ -2368,9 +2377,11 @@ ok('Tx keeps SA(S)-3 inside the sim chain', (() => {
    match-2026 check). SA-5 deliberately does NOT mirror: the Tx module states
    [SA-4, SA(S)-6, SA(S)-7] in words, so the document's own value stands. */
 const TX_MIRROR = {
-  'ACM-3': ['ACM-2'],
+  /* 10 Aug: the three sim-before-flight links restored here too, in the same
+     save as 2026 — the short course flies all six of these events. */
+  'ACM-3': ['ACM-2', 'ACM(S)-2'],
   'LASDT(S)-1': ['AAM-09', 'INT(S)-4', 'OPS-05', 'ST-10'],
-  'SA-2': ['SA-1'], 'SA-3': ['SA-2'],
+  'SA-2': ['SA-1', 'SA(S)-3'], 'SA-3': ['SA-2', 'SA(S)-4'],
   /* SA-5 moved to USER_TX_EDITS on 9 Aug: the user dropped the SA(S)-6 link */
 };
 const txMirrorWrong = Object.entries(TX_MIRROR).filter(([id, want]) =>

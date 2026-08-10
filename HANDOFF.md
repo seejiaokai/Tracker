@@ -73,18 +73,28 @@ of replacing them; Reset layout counts the drawn lines in its prompt and takes a
 snapshot; the redo stack is cleared on course and syllabus change; `renCourse` and
 `removeStudent` now move and purge every key they own.
 
+**Every link departure is closed (10 Aug).** A full audit of all four charts — structure,
+both printed maps, and each link compared across the charts — found two faults, and the user
+fixed both by hand in one save:
+
+| Was | Now |
+|---|---|
+| `TR(S)-4 → TR-2` missing on A/G - A/A | restored; all four charts agree and the map guards it |
+| `ACM(S)-2 → ACM-3`, `SA(S)-3 → SA-2`, `SA(S)-4 → SA-3` missing on 2026 **and** Tx | restored on both; these were the only places any chart let a flight go before its simulator |
+
+**`EPE → AAS-04` is not a missing link and never was.** It was called one twice, including in
+a PR body. The map transcription says so itself, under `app_keeps_links_this_map_does_not_draw`:
+neither map nor table draws it, it is legacy from the first port, and 2026 and Tx carry no
+feeder either. All four charts now agree that `AAS-04` takes nothing. **Read that note before
+"restoring" it.**
+
+Nothing now remains that a map draws and a chart lacks, bar the DAAR/NAAR refresher tail the
+user deliberately detached. `USER_EDITS_2026` and `USER_EDITS_AGAA` hold genuine departures
+only, so the maps govern everything else and a future drop fails instead of being excused.
+Direction of risk, still worth remembering: removals let an event unlock EARLY; additions can
+only delay.
+
 ## Still open, and what to ask
-
-### Two A/G - A/A links the map draws and the user's file does not
-
-`EPE → AAS-04` and `TR(S)-4 → TR-2`. Five were missing when the redraw came back; the user
-restored three by hand (`IAT-07 → INT(S)-1`, `TR(S)-3 → TR-1(P)`, `EPE → TR-4`), which is
-what says the whole group was dropped by redrawing those bundles rather than chosen. Those
-three are out of `USER_EDITS_AGAA` again, so the map guards them and a future drop fails.
-The remaining two are recorded as their file has them, **not endorsed. Raised 9 Aug; still
-unanswered. Restore only on their word.**
-
-Note the direction of risk: removals let an event unlock EARLY. Additions can only delay.
 
 ### Plan 9 is still blocked
 
