@@ -74,6 +74,17 @@ export default function ShowAllPanel() {
               <span className="sdot" style={{ background: core.TYPE_COLOR[e.type] || '#888' }}></span>
               <div>
                 <span className="sid">{e.id}</span> <span className="snm">{d.name || ''}</span>
+                {/* Show All was the only surface carrying human-readable event
+                    names and the only one that could not say whether the event
+                    was done — so naming an event and checking it meant two
+                    different screens. Shows the crew member the header is on. */}
+                {core.active ? (() => {
+                  const g = core.gradeOf(core.active, e.id);
+                  const label = { dco: 'DCO', dpco: 'DPCO', marg: 'Marginal', na: 'N.A.' }[g];
+                  return <span className={'sst' + (label ? '' : ' undone')}
+                    style={label ? { background: core.GRADE_FILL[g], color: g === 'dco' ? '#fff' : '#10131a' } : undefined}
+                    title={`${core.active}: ${label || 'not done'}`}>{label || 'not done'}</span>;
+                })() : null}
                 {editing ? <SaEdit key={e.id} id={e.id} onDone={() => setEditId(null)} /> : (
                   <div className="smeta">
                     {(d.fmt || d.hrs) ? <><b>Type:</b> {d.fmt || '—'}{d.hrs ? ' · ' + d.hrs : ''}<br /></> : null}

@@ -1205,6 +1205,47 @@ await pg.waitForTimeout(800);
   await ctx2.close();
 }
 
+/* ---- Show All must say whether the event is done ----
+   It was the only surface carrying human-readable event names and the only one
+   that could not answer "has this been flown", so naming an event and checking
+   it meant two screens. The badge reads the crew member the header is on. */
+{
+  await viaMenu('view', '#showAllBtn'); await pg.waitForTimeout(500);
+  const st = await pg.evaluate(() => {
+    const rows = [...document.querySelectorAll('.sarow')];
+    const withBadge = rows.filter(r => r.querySelector('.sst'));
+    return { rows: rows.length, badges: withBadge.length,
+      first: withBadge.length ? withBadge[0].querySelector('.sst').textContent : '' };
+  });
+  /* A filter from an earlier check may still be applied, so this only guards
+     against an empty list making the badge check below vacuous. */
+  ok('Show All lists events', st.rows >= 3, `${st.rows} rows`);
+  ok('every Show All row says whether it is done', st.badges === st.rows,
+    `${st.badges} of ${st.rows} rows carry a status`);
+  ok('the status reads as a grade or "not done"',
+    /^(DCO|DPCO|Marginal|N\.A\.|not done)$/.test(st.first), `first badge "${st.first}"`);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+}
+
+/* ---- a date box must not leave dd/mm vs mm/dd ambiguous ----
+   The native control takes its format from the browser locale, so it shows
+   mm/dd/yyyy while every date the app prints is "20 Aug 28". Two of these
+   feed currency arithmetic. The app echoes back what it understood. */
+{
+  const echo = await pg.evaluate(async () => {
+    const el = document.getElementById('lastSyll');
+    const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    set.call(el, '2028-08-20');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 500));
+    const f = el.closest('.field');
+    return { echo: (f.querySelector('.decho') || {}).textContent || '' };
+  });
+  ok('a date box shows the date the app understood, unambiguously',
+    /20 Aug 28|20 Aug 2028/.test(echo.echo), `echo "${echo.echo}"`);
+}
+
 /* ---- the panel can scroll its cards clear of the floating zoom control ----
    Found 15 Aug: #sideZoomCtl is position:fixed bottom-right and landed on the
    Plannable now card at the default 1440x900, printing the first chip as
