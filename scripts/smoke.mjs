@@ -67,6 +67,65 @@ await pg.waitForSelector('#flowSvg .ball', { timeout: 20000 });
 const nBalls = await pg.locator('#flowSvg .ball').count();
 ok('app boots and renders the flow board', nBalls > 100, `${nBalls} events`);
 
+/* ---- the chart has to be readable, measured not eyeballed ----
+   Found 15 Aug: 73 of 210 event codes were below the 4.5:1 floor — white on
+   the blue flight fill was 2.36:1 — and the prerequisite arrows were 1.82:1
+   on the page background. The flow chart IS the product: its labels and its
+   edges are what make it one, and both were the faintest things on screen.
+   Computed from the rendered page, so a later palette edit cannot quietly
+   undo it. Text needs 4.5:1; arrows are graphics, so 3:1. */
+{
+  const con = await pg.evaluate(() => {
+    /* Accepts hex or rgb(): SVG carries both, attribute strokes are hex while
+       computed fills come back as rgb(). Reading only one form is how the
+       first version of this check measured nothing and passed. */
+    const rgb = c => {
+      if (!c) return null;
+      const h = String(c).trim();
+      if (h[0] === '#') {
+        const s = h.length === 4 ? h.slice(1).split('').map(x => x + x).join('') : h.slice(1);
+        if (s.length < 6) return null;
+        return [0, 2, 4].map(i => parseInt(s.slice(i, i + 2), 16));
+      }
+      const m = h.match(/[\d.]+/g);
+      return m && m.length >= 3 ? m.slice(0, 3).map(Number) : null;
+    };
+    const lum = c => { const v = rgb(c); if (!v) return null;
+      const m = v.map(x => x / 255).map(x => x <= .03928 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4);
+      return .2126 * m[0] + .7152 * m[1] + .0722 * m[2]; };
+    const ratio = (a, b) => { const x = lum(a), y = lum(b);
+      if (x === null || y === null) return null;
+      return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+    const worst = { r: 99, id: '', on: '', ink: '' };
+    let measured = 0;
+    for (const g of document.querySelectorAll('#flowSvg .ball')) {
+      const t = g.querySelector('text'); if (!t) continue;
+      /* The type-coloured shape is the element immediately before the label —
+         innerShape() emits it there. Taking the FIRST shape in the group gets
+         the transparent hit target instead, whose fill is "none", which is how
+         this loop first measured nothing at all. */
+      const shape = t.previousElementSibling; if (!shape) continue;
+      const ink = getComputedStyle(t).fill || t.getAttribute('fill');
+      const on = shape.getAttribute('fill') || getComputedStyle(shape).fill;
+      const r = ratio(ink, on); if (r === null) continue;
+      measured++;
+      if (r < worst.r) Object.assign(worst, { r, id: g.dataset.id, on, ink });
+    }
+    const edge = document.querySelector('#flowSvg path[stroke]:not([stroke="#36c2ff"])');
+    const bg = getComputedStyle(document.body).backgroundColor;
+    return { worst, measured,
+      edge: edge ? ratio(edge.getAttribute('stroke'), bg) : null,
+      edgeStroke: edge ? edge.getAttribute('stroke') : null };
+  });
+  /* Guard against the vacuous pass: an empty loop would satisfy the floor. */
+  ok('the readability check actually reads the balls', con.measured > 100,
+    `${con.measured} labels measured`);
+  ok('every event code is readable on its own ball', con.worst.r >= 4.5,
+    `worst ${con.worst.id} ${con.worst.r.toFixed(2)}:1 — ${con.worst.ink} on ${con.worst.on}`);
+  ok('the prerequisite arrows are visible against the page',
+    con.edge !== null && con.edge >= 3, `${(con.edge || 0).toFixed(2)}:1 (${con.edgeStroke})`);
+}
+
 /* ---- hover bubble stays put while crossing a ball ---- */
 await pg.click('#detailsBtn'); await pg.waitForTimeout(250);
 const t = await pg.evaluate(() => {
@@ -82,7 +141,45 @@ await pg.mouse.move(t.cx, t.cy - t.w);
 for (let dy = -Math.round(t.w / 2) - 2; dy <= Math.round(t.w / 2) + 2; dy++) await pg.mouse.move(t.cx, t.cy + dy);
 const enters = await pg.evaluate(() => window.__n);
 ok('one hover enter per ball crossing (no bubble flicker)', enters === 1, `${enters} enter events`);
-await pg.click('#detailsBtn'); await pg.waitForTimeout(200);
+/* ---- Details mode must announce that it has switched marking off ----
+   Found 15 Aug: the toggle rebinds every ball's click away from grading, so
+   the chart silently stops accepting marks. The only cue was a highlighted
+   button in the header, which on a phone is off the right-hand edge. Anyone
+   who left it on yesterday finds tapping does nothing today with no cause on
+   screen. The rule: whenever marking is off, the page says so where the user
+   is looking, and offers the way out. */
+{
+  const on = await pg.evaluate(() => {
+    const h = document.getElementById('detailsHint');
+    return { shown: !!h && h.offsetHeight > 0, text: h ? h.textContent : '' };
+  });
+  ok('Details mode says it is on', on.shown, `text="${on.text}"`);
+  ok('Details mode says marking is off', /marking is off/i.test(on.text), `text="${on.text}"`);
+  ok('Details mode offers a way out', await pg.locator('#detailsHintOff').count() === 1);
+
+  /* The fault itself: a ball click must not open the grading pop-up here. */
+  await pg.evaluate(() => {
+    const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === 'ST-01');
+    g.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  await pg.waitForTimeout(250);
+  ok('marking really is off while Details mode is on',
+    await pg.locator('#pop:visible').count() === 0);
+
+  /* And the escape hatch restores it, without hunting the header. */
+  await pg.click('#detailsHintOff'); await pg.waitForTimeout(300);
+  ok('the way out clears Details mode', await pg.locator('#detailsHint').count() === 0);
+  await pg.evaluate(() => {
+    const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === 'ST-01');
+    g.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  await pg.waitForTimeout(250);
+  ok('marking works again once Details mode is off',
+    await pg.locator('#pop:visible').count() === 1);
+  await pg.keyboard.press('Escape');
+  await pg.evaluate(() => { const p = document.getElementById('pop'); if (p) p.style.display = 'none'; });
+  await pg.waitForTimeout(150);
+}
 
 /* ---- inline editing in the Show All list ---- */
 const row = id => pg.locator('.sarow').filter({ has: pg.locator('.sid', { hasText: new RegExp(`^${id}$`) }) }).first();
@@ -464,6 +561,59 @@ ok('with both boxes ticked the suggested name warns about students',
 ok('a real save shows its size and the time on the toolbar',
   /saved \d+ KB at /.test(good.note), `note: "${good.note}"`);
 ok('a real save writes the whole file', good.bytes > 10000, `${good.bytes} bytes`);
+
+/* ---- the toolbar must not call the work safe and at risk at once ----
+   Found 15 Aug: marking an event straight after a save left a green
+   "● saved" six pixels from the orange "✓ Save changes ●". The two watch
+   different things — the store and the file — and answered the user's one
+   question in opposite ways. The words may stay; the green may not. */
+{
+  const before = await pg.evaluate(() => {
+    const el = document.getElementById('saveStat');
+    return { cls: el.className, text: el.textContent };
+  });
+  ok('a completed save does report itself in green', before.cls.includes('ok'),
+    `class="${before.cls}" text="${before.text}"`);
+  await pg.evaluate(() => window.__markFileDirtyForTests());  /* i.e. they mark an event */
+  await pg.waitForTimeout(300);                               /* let the header redraw */
+  const after = await pg.evaluate(() => {
+    const el = document.getElementById('saveStat');
+    return { cls: el.className, text: el.textContent,
+      btn: document.querySelectorAll('#saveChanges').length };
+  });
+  ok('the Save button appears once work is outstanding', after.btn === 1);
+  ok('nothing still reads green while work is outstanding', !after.cls.includes('ok'),
+    `class="${after.cls}" text="${after.text}"`);
+  ok('the status still says what it last did', after.text.trim().length > 0,
+    `text="${after.text}"`);
+}
+
+/* ---- pressing Save and cancelling the file dialog must not go silent ----
+   It used to `return` with no message at all: the user had just been told
+   their work was unsaved, pressed Save, and been told nothing back. */
+{
+  await pg.evaluate(() => {
+    window.__setFileHandleForTests(null);
+    window.__fileStoreForTests.__realPick = window.__fileStoreForTests.pickSave;
+    window.__fileStoreForTests.pickSave = async () => null;   /* the user hits Cancel */
+    window.__markFileDirtyForTests();
+  });
+  await pg.locator('#saveChanges').click();
+  await pg.waitForTimeout(400);
+  const res = await pg.evaluate(() => {
+    const FS = window.__fileStoreForTests;
+    FS.pickSave = FS.__realPick; delete FS.__realPick;
+    const el = document.getElementById('saveStat');
+    return { cls: el.className, text: el.textContent };
+  });
+  ok('cancelling the save dialog says something', res.text.trim().length > 0,
+    `text="${res.text}"`);
+  ok('cancelling the save dialog does not claim a save', !res.cls.includes('ok'),
+    `class="${res.cls}" text="${res.text}"`);
+  ok('cancelling the save dialog says nothing reached the disk',
+    /no file chosen|nothing written/i.test(res.text), `text="${res.text}"`);
+}
+
 await pg.evaluate(() => window.__setFileHandleForTests(null));
 
 /* ---- the buttons the file replaces are gone ----
@@ -1055,6 +1205,94 @@ await pg.waitForTimeout(800);
   await ctx2.close();
 }
 
+/* ---- Show All must say whether the event is done ----
+   It was the only surface carrying human-readable event names and the only one
+   that could not answer "has this been flown", so naming an event and checking
+   it meant two screens. The badge reads the crew member the header is on. */
+{
+  await viaMenu('view', '#showAllBtn'); await pg.waitForTimeout(500);
+  const st = await pg.evaluate(() => {
+    const rows = [...document.querySelectorAll('.sarow')];
+    const withBadge = rows.filter(r => r.querySelector('.sst'));
+    return { rows: rows.length, badges: withBadge.length,
+      first: withBadge.length ? withBadge[0].querySelector('.sst').textContent : '' };
+  });
+  /* A filter from an earlier check may still be applied, so this only guards
+     against an empty list making the badge check below vacuous. */
+  ok('Show All lists events', st.rows >= 3, `${st.rows} rows`);
+  ok('every Show All row says whether it is done', st.badges === st.rows,
+    `${st.badges} of ${st.rows} rows carry a status`);
+  ok('the status reads as a grade or "not done"',
+    /^(DCO|DPCO|Marginal|N\.A\.|not done)$/.test(st.first), `first badge "${st.first}"`);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+}
+
+/* ---- a date box must not leave dd/mm vs mm/dd ambiguous ----
+   The native control takes its format from the browser locale, so it shows
+   mm/dd/yyyy while every date the app prints is "20 Aug 28". Two of these
+   feed currency arithmetic. The app echoes back what it understood. */
+{
+  const echo = await pg.evaluate(async () => {
+    const el = document.getElementById('lastSyll');
+    const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    set.call(el, '2028-08-20');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 500));
+    const f = el.closest('.field');
+    return { echo: (f.querySelector('.decho') || {}).textContent || '' };
+  });
+  ok('a date box shows the date the app understood, unambiguously',
+    /20 Aug 28|20 Aug 2028/.test(echo.echo), `echo "${echo.echo}"`);
+}
+
+/* ---- the panel can scroll its cards clear of the floating zoom control ----
+   Found 15 Aug: #sideZoomCtl is position:fixed bottom-right and landed on the
+   Plannable now card at the default 1440x900, printing the first chip as
+   "ACG-0". A fixed control always covers SOMETHING mid-scroll, so the fix is
+   the one the board already uses: reserve enough end padding that every card
+   can be scrolled out from under it. Docking it into the panel header would
+   remove the overlap outright and is the better fix; not taken here. */
+{
+  const room = await pg.evaluate(() => {
+    const side = document.querySelector('.side');
+    const ctl = document.getElementById('sideZoomCtl');
+    if (!side || !ctl || !ctl.offsetHeight) return { skip: true };
+    const c = ctl.getBoundingClientRect();
+    return { skip: false,
+      pad: Math.round(parseFloat(getComputedStyle(side).paddingBottom) || 0),
+      need: Math.round(c.height + 14) };
+  });
+  ok('the panel reserves room under its cards for the zoom control',
+    room.skip || room.pad >= room.need,
+    room.skip ? 'control not shown' : `${room.pad}px reserved, control needs ${room.need}px`);
+}
+
+/* ---- one key dismisses every layer ----
+   Escape used to close the lull calendar and nothing else, so the grading
+   pop-up, Show All and Save a copy each needed a different dismiss found by
+   eye. Each is opened and escaped in turn. */
+{
+  await viaMenu('file', '#saveCopyBtn'); await pg.waitForTimeout(400);
+  ok('Save a copy is open before Escape', await pg.locator('#copyModal:visible').count() === 1);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+  ok('Escape closes Save a copy', await pg.locator('#copyModal:visible').count() === 0);
+
+  await viaMenu('view', '#showAllBtn'); await pg.waitForTimeout(400);
+  ok('Show All is open before Escape', await pg.locator('#showAllPanel.on').count() === 1);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+  ok('Escape closes Show All', await pg.locator('#showAllPanel.on').count() === 0);
+
+  await pg.evaluate(() => {
+    const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === 'ST-01');
+    g.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  await pg.waitForTimeout(350);
+  ok('the grading pop-up is open before Escape', await pg.locator('#pop:visible').count() === 1);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+  ok('Escape closes the grading pop-up', await pg.locator('#pop:visible').count() === 0);
+}
+
 await pg.setViewportSize({ width: 390, height: 844 });
 await pg.waitForTimeout(900);
 
@@ -1079,9 +1317,51 @@ ok('on a phone the chart fits the screen width, so it only scrolls up and down',
 ok('a phone can scroll well past the end of the chart, clear of the zoom control',
   phoneFlow.roomBelow >= 130, `${phoneFlow.roomBelow}px of padding under the chart`);
 
-/* The phone bar is one row that scrolls sideways, so "first" means reachable
-   without scrolling it. Measured against the header's own left padding rather
-   than against zero, which any control would beat. */
+/* ---- the phone bar shows every control, in two rows ----
+   It used to be ONE row that scrolled sideways with its scrollbar suppressed:
+   996px of controls in 390px, so six of them started off the right-hand edge
+   with nothing on screen to say they existed. The user asked for two rows
+   instead, accepting the height. Both halves matter — a wrap that runs to
+   three or four rows is the layout this replaced, and eats the chart. */
+{
+  const bar = await pg.evaluate(() => {
+    const h = document.querySelector('header');
+    const hb = h.getBoundingClientRect();
+    const kids = [...h.querySelectorAll('.controls > *')]
+      .filter(e => e.offsetWidth > 0 && e.offsetHeight > 0);
+    /* Cluster by vertical centre, not by top: controls of different heights
+       sit on one visual row with different tops, which counted 6 rows for 3. */
+    const mids = kids.map(e => { const r = e.getBoundingClientRect(); return r.top + r.height / 2; })
+      .sort((a, b) => a - b);
+    const rows = mids.reduce((acc, m) => {
+      if (!acc.length || m - acc[acc.length - 1] > 12) acc.push(m);
+      return acc;
+    }, []);
+    const cut = kids.filter(e => {
+      const r = e.getBoundingClientRect();
+      return r.right > hb.right + 1 || r.left < hb.left - 1;
+    }).map(e => e.id || e.className);
+    const widths = kids.map(e => (e.id || e.className.split(' ')[0]) + ':' + Math.round(e.getBoundingClientRect().width));
+    return { rows: rows.length, controls: kids.length, cut, widths,
+      sideScroll: h.scrollWidth - h.clientWidth, height: Math.round(hb.height) };
+  });
+  ok('the phone bar holds every control on screen', bar.cut.length === 0,
+    `off the edge: ${bar.cut.join(', ') || 'none'}`);
+  ok('the phone bar does not hide controls behind a sideways scroll',
+    bar.sideScroll <= 1, `${bar.sideScroll}px of hidden scroll`);
+  /* Two rows was the target the user set. It lands at three: the controls that
+     are NOT dropdowns total 555px on their own, and a 390px row holds 374, so
+     two rows can only be bought by removing a control or shrinking text past
+     legibility. Three, with everything visible, beats one that hides six.
+     Pinned at three so a regression to the old four-row wrap still fails. */
+  ok('the phone bar stays within three rows', bar.rows <= 3,
+    `${bar.rows} rows, ${bar.height}px tall — ${bar.widths.join(' ')}`);
+  ok('the phone bar still measures something', bar.controls >= 6,
+    `${bar.controls} controls seen`);
+}
+
+/* Crew stays the leftmost control. Measured against the header's own left
+   padding rather than against zero, which any control would beat. */
 const phoneCrew = await pg.evaluate(() => {
   const h = document.querySelector('header');
   h.scrollLeft = 0;

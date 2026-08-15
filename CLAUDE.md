@@ -94,41 +94,41 @@ vanishes mid-chain and the reading silently skips it. This produced five confide
 answers in one session. **Ask the user for screenshots of the rendered pages** — those show
 the composited truth. `scripts/smoke.mjs` pins the specific links this trap corrupts.
 
-Two more traps, both real:
-
-- PNGs are RGBA. `.convert('RGB')` flattens transparency onto **black** and two pages come
-  out solid black. Composite onto white: `Image.alpha_composite(white, im)`.
-- Page-join letters (A, B, … AA, … NN) are **wires, not events**, and a prerequisite can
-  travel two or three pages through them. Read each page in isolation and you lose the link.
-  Transcribe letters as nodes (`T-02 → A`, `A → AVI-06`) and resolve the chains afterwards.
+Two more traps: PNGs are RGBA, so `.convert('RGB')` flattens onto **black** and two pages
+come out solid black (composite onto white instead); and page-join letters (A, B, … NN) are
+**wires, not events** — a prerequisite can travel three pages through them, so transcribe
+letters as nodes (`T-02 → A`, `A → AVI-06`) and resolve the chains afterwards.
 
 The map is authoritative: the pages print *"Flowchart is authoritative and the table
-prerequisites are treated as superseded."* Two blocks of event tables exist and disagree with
-each other in seven places; use them only as a weak cross-check.
+prerequisites are treated as superseded."* The two blocks of event tables disagree with each
+other in seven places; use them only as a weak cross-check.
 
 ## Architecture
 
-- `src/app/core.js` — the whole app model plus the imperatively-rendered SVG flow
-  board. Kept imperative for drag/pan/zoom performance; everything else is React.
-- `src/data/syllabi.js` — one single-line JSON blob per syllabus. It round-trips
-  exactly through `JSON.stringify`, so edit it programmatically. Each event's
-  `prereqs` array is the *only* source of flow-chart edges.
-- `src/data/layouts.js` — x/y positions only, no connection info.
-- `src/data/eventInfo.js` — names, format, hours.
-- `src/app/fileFormat.js` — the shape of the user's saved file. No browser APIs
-  and no `core.js` import, so `smoke.mjs` checks it in plain Node.
-- `src/app/fileStore.js` — reaching the user's own files. Chrome and Edge write
-  back in place; elsewhere it downloads and says so.
+- `src/app/core.js` — the whole app model plus the imperatively-rendered SVG flow board,
+  kept imperative for drag/pan/zoom performance; everything else is React.
+- `src/data/syllabi.js` — one single-line JSON blob per syllabus, round-tripping exactly
+  through `JSON.stringify`, so edit it programmatically. Each event's `prereqs` array is
+  the *only* source of flow-chart edges. `layouts.js` is x/y only (no connections);
+  `eventInfo.js` is names, format, hours.
+- `src/app/fileFormat.js` — the saved file's shape; no browser APIs and no `core.js` import, so `smoke.mjs` checks it in plain Node.
+- `src/app/fileStore.js` — reaching the user's own files; Chrome and Edge write back in
+  place, elsewhere it downloads and says so.
 
 ## Superpowers plugin
 
-`obra/superpowers` is enabled for this repo in `.claude/settings.json`, so its
-skills (`superpowers:brainstorming`, `:test-driven-development`, `:systematic-debugging`,
-`:writing-plans`, …) load in every session. Declaring it there is not enough on its
-own — a GitHub-marketplace plugin is only *declared* by settings, and this remote
-image starts with an empty `~/.claude`, so `.claude/hooks/session-start.sh` re-installs
-it each session. Startup prints `superpowers: ready`; anything else means the skills
-are missing and the printed `claude plugin install` command is the fix.
+`obra/superpowers` is only *declared* by `.claude/settings.json` and this image starts with
+an empty `~/.claude`, so `.claude/hooks/session-start.sh` re-installs it each session.
+Startup prints `superpowers: ready`; anything else means the printed install command is the fix.
+
+## Claude for Chrome
+
+Only where Chrome is connected. **This remote environment has neither Claude for
+Chrome nor Playwright MCP**, so `npm run smoke` / `npm run live` stay the way to drive the
+app here — including their screenshots, which is how several bugs were found.
+
+- `read_page` for refs from the accessibility tree; `find` to locate by description
+- Click using `ref`, never coordinates. No screenshots unless asked (inverted for Playwright)
 
 ## Gotchas
 
@@ -155,15 +155,15 @@ are missing and the printed `claude plugin install` command is the fix.
 - z-index ladder: `.modal` 60 · `.lullcal` 70 · `#dlgModal`/`#ordModal` 71 ·
   `#showAllPanel` 81 · `#infoModal` 91 · Cloud dialog 99999. Header menus 50,
   the phone search strip 52. Anything new that opens *over* Show All must clear 81.
-- The desktop bar has **no spare width at 1440**. Adding one control wrapped the
-  header onto two rows and cost 44px of chart. The heading hides below 1600px to
-  pay for the search box; the next addition has to find its own room.
-- `#ordModal` serves syllabi, courses **and** crew — one `core.ordMode`, one set
-  of ids, `data-ord` says which. Only one can ever be open.
-- The page column lives on **`#root`**, not `body` — React mounts everything
-  inside it, so a flex column on `body` lays out `#root` alone and the whole page
-  scrolls instead of the board. `#root` needs `min-width:0` too, or the phone's
-  scrollable one-row header widens every card.
+- The desktop bar has **no spare width at 1440** — one added control wrapped it onto two
+  rows and cost 44px of chart; the heading hides below 1600px to pay for the search box.
+  The phone bar wraps to three rows (15 Aug), its width bought by trimming captions and
+  selects, not by hiding controls.
+- `#ordModal` serves syllabi, courses **and** crew — one `core.ordMode`, one set of ids,
+  `data-ord` says which. Only one can ever be open.
+- The page column lives on **`#root`**, not `body` — React mounts everything inside it, so
+  a flex column on `body` lays out `#root` alone and the whole page scrolls instead of the
+  board. `#root` needs `min-width:0` too.
 - **`styles.css` has two `@media(max-width:1050px)` blocks, top and end.** Phone
   overrides belong in the *last*: same specificity means later wins, and the
   general rules sit between them. This has silently beaten a whole block of

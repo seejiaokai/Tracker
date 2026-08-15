@@ -1,6 +1,6 @@
 :root{
  --bg:#0f1115;--panel:#161922;--panel2:#1d212b;--line:#2b313d;--ink:#e9ecf2;--muted:#98a2b3;--accent:#36c2ff;
- --flight:#19b6e8;--acad:#27d64a;--test:#ff4040;--sim:#ffe000;--device:#a64bff;
+ --flight:#19b6e8;--acad:#27d64a;--test:#ff4040;--sim:#ffe000;--device:#b063ff;
  --dco:#000;--dpco:#1f6dff;--marg:#27d64a;--na:#cdbb8e;--fail:#ff2b2b;
  --orange:#ff9800;--red:#ff2b2b;--grey:#5a6172;
 }
@@ -82,6 +82,11 @@ button.sm{padding:3px 7px;font-size:11px}
 .ordrow button{padding:2px 7px;font-size:12px}
 .sarow .sdot{width:11px;height:11px;border-radius:50%;margin-top:3px}
 .sarow .sid{font-weight:700}.sarow .snm{color:var(--ink)}
+.decho{font-size:10.5px;color:var(--muted);margin-top:2px;letter-spacing:.2px}
+/* Status badge: dark ink on the grade's own fill, matching the ring colours on
+   the board so one vocabulary covers both surfaces. */
+.sst{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:20px;font-size:10.5px;font-weight:600;vertical-align:1px}
+.sst.undone{background:transparent;border:1px dashed var(--line);color:var(--muted);font-weight:500}
 .sarow .smeta{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.5}
 .sarow .smeta b{color:var(--ink);font-weight:600}
 .sarow .sedit{align-self:center}
@@ -104,7 +109,12 @@ button.sm{padding:3px 7px;font-size:11px}
 .board::-webkit-scrollbar-thumb:hover{background:#5f6b7e}
 .board::-webkit-scrollbar-corner{background:#12151b}
 .board.dragging,.side.dragging{cursor:grabbing;user-select:none}
-.side{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:12px}
+/* padding-bottom clears the floating #sideZoomCtl (its own height plus its
+   14px inset). Without it the control lands ON the Plannable now card at the
+   default 1440x900 with no scrolling or resizing — the first chip printed as
+   "ACG-0" out of the box. Floating is deliberate, so the panel makes room
+   rather than the control moving into the flow. */
+.side{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:12px;padding-bottom:62px}
 #sideZoomCtl{position:fixed;z-index:60;right:14px;bottom:14px;display:flex;gap:4px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:4px 6px;box-shadow:0 4px 14px rgba(0,0,0,.45)}
 #sideZoomCtl button{padding:2px 8px;font-size:14px;line-height:1.2;min-width:26px}
 #sideZoomCtl #szReset{font-size:11px;min-width:0}
@@ -162,6 +172,9 @@ svg.perf .edgehit{pointer-events:none}
 .arrhintwrap{position:relative;height:0;z-index:45}
 .arrhint{position:absolute;top:0;left:0;right:0;background:#16384a;border-bottom:1px solid var(--accent);color:#dff;padding:4px 12px;font-size:12px;display:none;text-align:center;pointer-events:none;opacity:.97}
 .arrhint.on{display:block}
+/* The bar itself stays click-transparent so it cannot swallow chart clicks;
+   only the escape button takes the pointer back. */
+.hintoff{pointer-events:auto;margin-left:10px;background:var(--accent);color:#04121b;border:0;border-radius:5px;padding:2px 9px;font-size:12px;font-weight:600;cursor:pointer;min-height:24px}
 /* Fixed-width slot so the bar is the same size dirty or clean. */
 .saveslot{display:inline-flex;align-items:center;gap:6px;justify-content:flex-end;min-width:172px}
 .savestat{font-size:11px;color:#8a93a3;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis}
@@ -376,14 +389,27 @@ small.hint{color:var(--muted);font-size:11px}
  /* The bar took 281px before a single statistic appeared, and still 175 after
     tightening, because 10 controls wrap onto four rows in 390px. One row that
     scrolls sideways is 44px whatever it holds — that is 130px of screen handed
-    back to the statistics. */
- header{padding:5px 8px;gap:8px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
- header::-webkit-scrollbar{display:none}
+    back to the statistics.
+    Superseded 15 Aug at the user's request: one scrolling row hid six of the
+    controls off the right-hand edge behind a suppressed scrollbar, with
+    nothing on screen to say they were there. Two wrapped rows show every
+    control and still leave the board the rest of the screen. The width that
+    buys the second row comes from dropping the inline field labels — each
+    dropdown already prints its own value — not from hiding controls. */
+ header{padding:5px 8px;gap:6px;row-gap:5px;flex-wrap:wrap;overflow:visible}
  header>div:first-child{display:none}
- .controls{flex:0 0 auto;flex-wrap:nowrap;margin-left:0}
- /* Collapses .hspacer to nothing as well, so the one scrolling row stays
-    packed and Crew sits hard against the left edge. */
+ .controls{flex:1 1 auto;flex-wrap:wrap;gap:6px;margin-left:0}
  .controls>*{flex:0 0 auto}
+ /* An auto-margin spacer applies per flex line, so on a wrapping bar it would
+    push whatever landed on row one hard right. */
+ .hspacer{display:none}
+ /* Only the caption goes, never the label itself — it WRAPS the dropdown, so
+    hiding the label would take the control with it. */
+ .controls .lbltx{display:none}
+ /* Eleven controls only reach two rows in 390px if they are trimmed to it:
+    the three dropdowns are the width, and they still print their own value. */
+ .controls select{max-width:88px;padding:4px 6px;font-size:12px}
+ .controls button.sm{padding:3px 6px}
  /* A 132px box in a 390px row leaves nothing for anything else, so the phone
     gets a 🔍 button and a full-width strip under the bar. position:fixed, not
     absolute: the header scrolls sideways, and an overflow container clips its
@@ -395,6 +421,10 @@ small.hint{color:var(--muted);font-size:11px}
    box-shadow:0 8px 26px rgba(0,0,0,.5)}
  .findpanel.on{display:flex}
  #hSearch{flex:1 1 auto;min-width:0;width:auto}
- .saveslot{min-width:0}
+ /* 204px of the 865px the bar wants was this slot, because .savestat is capped
+    at 170px for a desktop row. The words still ellipsis; the full text is in
+    the File menu beside the file name. */
+ .saveslot{min-width:0;gap:4px}
+ .savestat{max-width:72px;font-size:10px}
  .legend{display:none}
 }

@@ -123,7 +123,7 @@ export default function Header() {
             separate phone rule. It stays INSIDE .controls because the header
             checks scope to "header .controls" and a sibling would silently
             drop out of them. */}
-        <label className="sub">Crew{' '}
+        <label className="sub"><span className="lbltx">Crew</span>{' '}
           <select id="activeSel" value={core.active || ''} onChange={e => core.setActive(e.target.value)}>
             {core.roster.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
@@ -135,7 +135,7 @@ export default function Header() {
         </Menu>
         <HeaderSearch />
 
-        <label className="sub">Course{' '}
+        <label className="sub"><span className="lbltx">Course</span>{' '}
           <select id="courseSel" value={core.course || ''} onChange={e => core.switchCourse(e.target.value)}>
             {core.COURSES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -148,7 +148,7 @@ export default function Header() {
           <button className="sm" id="delCourse" title="Delete the current course" onClick={core.delCourse}>🗑 Delete course</button>
         </Menu>
 
-        <label className="sub">Syllabus{' '}
+        <label className="sub"><span className="lbltx">Syllabus</span>{' '}
           <select id="sylSel" value={sylValue} onChange={e => core.switchSyllabus(e.target.value)}>
             {sylOptions.map(n => <option key={n} value={n}>{n + (core.CUSTOMS[n] ? ' ✎' : '')}</option>)}
           </select>
@@ -183,7 +183,10 @@ export default function Header() {
         </Menu>
 
         <button className={'sm' + (core.arrangeMode ? ' primary' : '')} id="arrangeBtn" onClick={core.toggleArrange}>{core.arrangeMode ? '✓ Done' : '✎ Edit'}</button>
-        <button className={'sm' + (core.showDetails ? ' primary' : '')} id="detailsBtn" title="Show title, type, crew & prerequisites on every ball on the flow chart" onClick={core.toggleDetails}>📋 Show All Details</button>
+        {/* Named as the mode it is, not as a display option: turning it on
+            stops the chart accepting marks, which "Show All Details" gave no
+            hint of. Shorter too, and the 1440 bar has no spare width. */}
+        <button className={'sm' + (core.showDetails ? ' primary' : '')} id="detailsBtn" title="Show title, type, crew & prerequisites on every event — marking is off while this is on" onClick={core.toggleDetails}>ⓘ Details mode</button>
         {/* Save changes shows only when there is something to lose — marks and
             dates write themselves to storage, flow edits and the open file do
             not. The slot keeps its width whether the button is there or not: a
@@ -191,7 +194,11 @@ export default function Header() {
             slides everything out from under the pointer mid-drag. */}
         <span className="saveslot">
           {dirty ? <button className="sm dirty" id="saveChanges" title="Save your work — the syllabus, and your file if one is open" onClick={core.saveChangesClick}>✓ Save changes ●</button> : null}
-          <span id="saveStat" className={'savestat ' + core.saveStat.cls}>{core.saveStat.text}</span>
+          {/* Green here while the orange button is showing would tell the user
+              their work is both safe and at risk at once — the two watch
+              different things (the store vs the file). Keep the words, drop
+              the green until nothing is outstanding. Errors stay red. */}
+          <span id="saveStat" className={'savestat ' + (dirty && core.saveStat.cls === 'ok' ? '' : core.saveStat.cls)}>{core.saveStat.text}</span>
         </span>
       </div>
     </header>

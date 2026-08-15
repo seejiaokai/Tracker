@@ -32,8 +32,8 @@ const refreshActive = notify;
 const refreshCourses = notify;
 
 export const DEFAULT_SYLLABUS = SYLLABI[DEFAULT_SYL_NAME];
-export const TYPE_COLOR = { flight: '#19b6e8', acad: '#27d64a', test: '#ff4040', sim: '#ffe000', device: '#a64bff' };
-const DARKC = new Set(['sim', 'acad', 'na']); // labels needing dark text on light fills
+export const TYPE_COLOR = { flight: '#19b6e8', acad: '#27d64a', test: '#ff4040', sim: '#ffe000', device: '#b063ff' };
+const DARKC = new Set(['sim', 'acad', 'na', 'flight', 'test', 'device']); // labels needing dark text on light fills
 export const GRADE_FILL = { dco: '#000000', dpco: '#1f6dff', marg: '#27d64a', na: '#cdbb8e' };
 export const DONE = new Set(['dco', 'dpco', 'marg']);
 export let eventInfo = {}; export let showDetails = false;
@@ -946,7 +946,7 @@ function buildFreeLines(routes, vs) {
     const on = (selLine === L.id);
     const av = lineArrow(L);
     const mk = av === 0 ? ' marker-end="url(#arr)"' : av === 1 ? ' marker-start="url(#arr)"' : '';
-    o += '<path id="lp_' + escapeId(L.id) + '" d="' + d + '" fill="none" stroke="' + (on ? '#36c2ff' : '#39404e') + '" stroke-width="' + (on ? 2.4 : 1.3) + '"' + mk + '/>';
+    o += '<path id="lp_' + escapeId(L.id) + '" d="' + d + '" fill="none" stroke="' + (on ? '#36c2ff' : '#657085') + '" stroke-width="' + (on ? 2.4 : 1.3) + '"' + mk + '/>';
     if (arrangeMode) {
       o += '<path class="linehit" id="lh_' + escapeId(L.id) + '" data-lid="' + escapeId(L.id) + '" d="' + d + '" fill="none" stroke="transparent" stroke-width="12"/>';
       if (!L.a) o += '<circle cx="' + P[0].x.toFixed(1) + '" cy="' + P[0].y.toFixed(1) + '" r="4" fill="#ffb84d" stroke="#7a4b00" stroke-width="1"/>';
@@ -1145,7 +1145,7 @@ function buildEdges() {
     if (o.line) return; const d = edgePath(o, vs); const m = edgeMeta[o.k] || {}; const ar = (m.arrow == null) ? 0 : m.arrow;
     const mk2 = ar === 0 ? ' marker-end="url(#arr)"' : ar === 1 ? ' marker-start="url(#arr)"' : '';
     const on = (selEdge === o.k);
-    const style = on ? ' stroke="#36c2ff" stroke-width="2.4"' : ' stroke="#39404e" stroke-width="1.3"';
+    const style = on ? ' stroke="#36c2ff" stroke-width="2.4"' : ' stroke="#657085" stroke-width="1.3"';
     out += `<path d="${d}" fill="none"${style}${mk2}/>`;
     if (arrangeMode) out += `<path class="edgehit" data-p="${escapeId(o.p)}" data-c="${escapeId(o.c)}" data-k="${escapeId(o.k)}" d="${d}" fill="none" stroke="transparent" stroke-width="12"/>`;
   });
@@ -2533,6 +2533,15 @@ export function handleEscapeKey(e) {
   /* Escape abandons a half-picked lull period rather than saving one end of it. */
   if (lullCopy) { e.preventDefault(); closeLullCopy(); return; }
   if (lullPick) { e.preventDefault(); closeLullPicker(); return; }
+  /* Escape used to close the lull calendar and nothing else, so the grading
+     pop-up, Show All and Save a copy each needed their own dismiss found by
+     eye — four different contracts for one gesture. Innermost first, matching
+     what sits on top: Save a copy, then the grading pop-up, then Show All.
+     Show All's own handler only fires while focus is inside the panel, which
+     it usually is not. */
+  if (copyOpen) { e.preventDefault(); closeCopy(); return; }
+  if (pop) { e.preventDefault(); closePop(); return; }
+  if (showAllOpen) { e.preventDefault(); closeShowAll(); return; }
   if (!arrangeMode || tool !== 'line' || !drawing) return;
   e.preventDefault(); finishLine(drawing.pts.length >= 2);
 }
@@ -2639,10 +2648,21 @@ async function deleteEventById(rid) {
 }
 
 /* ---------- save status + backup (auto-save + manual backup button) ---------- */
-export let saveStat = { text: '● saved', cls: 'ok' };
+/* Starts blank, not "saved". A fresh load has saved nothing, and claiming it
+   spends the one indicator the user has for whether their work is safe. */
+export let saveStat = { text: '', cls: '' };
+/* A bare green "saved" used to be shown for EVERY 'ok', whatever had actually
+   happened — so switching syllabus reported "saved", and a successful syllabus
+   write reported the same words as a successful file write. Sat next to the
+   orange "Save changes" button (which watches a different flag) it told the
+   user their work was both safe and at risk in the same six pixels.
+   Now only a caller that passes no message gets the bare word; anything that
+   names what it did says so. Three callers rely on the empty form. */
 function setSaveStatus(msg, cls) {
   saveStat = {
-    text: (cls === 'ok' ? '● saved' : cls === 'saving' ? '● saving…' : cls === 'err' ? '● ' + msg : '● ' + msg),
+    text: (cls === 'saving' ? (msg ? '● ' + msg : '● saving…')
+      : cls === 'ok' ? (msg ? '● ' + msg : '● saved')
+        : '● ' + msg),
     cls: cls || ''
   };
   notify();
@@ -2967,7 +2987,13 @@ export async function saveToFileClick() {
       fileDirty = false; notify(); return;
     }
     fileHandle = await FS.pickSave(name);      /* gesture-critical */
-    if (!fileHandle) return;
+    /* Cancelling used to return in silence: the user had just been told their
+       work was unsaved, pressed Save, and been told nothing at all. Say what
+       did and did not happen — the syllabus write above this already ran. */
+    if (!fileHandle) {
+      setSaveStatus('no file chosen — nothing written to disk', 'err');
+      notify(); return;
+    }
   }
   if (!await FS.ensureWritable(fileHandle)) {
     setSaveStatus('not saved — permission to write your file was declined', 'err'); notify(); return;
