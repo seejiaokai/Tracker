@@ -183,7 +183,10 @@ export default function Header() {
         </Menu>
 
         <button className={'sm' + (core.arrangeMode ? ' primary' : '')} id="arrangeBtn" onClick={core.toggleArrange}>{core.arrangeMode ? '✓ Done' : '✎ Edit'}</button>
-        <button className={'sm' + (core.showDetails ? ' primary' : '')} id="detailsBtn" title="Show title, type, crew & prerequisites on every ball on the flow chart" onClick={core.toggleDetails}>📋 Show All Details</button>
+        {/* Named as the mode it is, not as a display option: turning it on
+            stops the chart accepting marks, which "Show All Details" gave no
+            hint of. Shorter too, and the 1440 bar has no spare width. */}
+        <button className={'sm' + (core.showDetails ? ' primary' : '')} id="detailsBtn" title="Show title, type, crew & prerequisites on every event — marking is off while this is on" onClick={core.toggleDetails}>ⓘ Details mode</button>
         {/* Save changes shows only when there is something to lose — marks and
             dates write themselves to storage, flow edits and the open file do
             not. The slot keeps its width whether the button is there or not: a

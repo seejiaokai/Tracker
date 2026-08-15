@@ -83,8 +83,19 @@ export default function App() {
           occupying flow space. Its height changes with every tool switch and
           1.8s flash message; in flow that shoved the chart up and down under
           the pointer mid-draw, so lines connected to the wrong place. */}
+      {/* Details mode silently rebinds every ball's click away from grading, so
+          without this the chart just stops responding to marking with no cause
+          on screen — and on a phone the button that did it is off the edge of
+          the header. Arrange wins when both are on: its own click tools take
+          the ball first. */}
       <div className="arrhintwrap">
         <div className={'arrhint' + (core.arrangeMode ? ' on' : '')} id="arrhint">{core.hintFlash || core.hintBase}</div>
+        {!core.arrangeMode && core.showDetails
+          ? <div className="arrhint on" id="detailsHint">
+              Details mode — click an event for its brief. <b>Marking is off.</b>
+              <button className="hintoff" id="detailsHintOff" onClick={core.toggleDetails}>Turn off</button>
+            </div>
+          : null}
       </div>
       <Legend />
       <ViewTabs tab={tab} setTab={setTab} />

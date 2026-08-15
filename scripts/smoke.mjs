@@ -82,7 +82,45 @@ await pg.mouse.move(t.cx, t.cy - t.w);
 for (let dy = -Math.round(t.w / 2) - 2; dy <= Math.round(t.w / 2) + 2; dy++) await pg.mouse.move(t.cx, t.cy + dy);
 const enters = await pg.evaluate(() => window.__n);
 ok('one hover enter per ball crossing (no bubble flicker)', enters === 1, `${enters} enter events`);
-await pg.click('#detailsBtn'); await pg.waitForTimeout(200);
+/* ---- Details mode must announce that it has switched marking off ----
+   Found 15 Aug: the toggle rebinds every ball's click away from grading, so
+   the chart silently stops accepting marks. The only cue was a highlighted
+   button in the header, which on a phone is off the right-hand edge. Anyone
+   who left it on yesterday finds tapping does nothing today with no cause on
+   screen. The rule: whenever marking is off, the page says so where the user
+   is looking, and offers the way out. */
+{
+  const on = await pg.evaluate(() => {
+    const h = document.getElementById('detailsHint');
+    return { shown: !!h && h.offsetHeight > 0, text: h ? h.textContent : '' };
+  });
+  ok('Details mode says it is on', on.shown, `text="${on.text}"`);
+  ok('Details mode says marking is off', /marking is off/i.test(on.text), `text="${on.text}"`);
+  ok('Details mode offers a way out', await pg.locator('#detailsHintOff').count() === 1);
+
+  /* The fault itself: a ball click must not open the grading pop-up here. */
+  await pg.evaluate(() => {
+    const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === 'ST-01');
+    g.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  await pg.waitForTimeout(250);
+  ok('marking really is off while Details mode is on',
+    await pg.locator('#pop:visible').count() === 0);
+
+  /* And the escape hatch restores it, without hunting the header. */
+  await pg.click('#detailsHintOff'); await pg.waitForTimeout(300);
+  ok('the way out clears Details mode', await pg.locator('#detailsHint').count() === 0);
+  await pg.evaluate(() => {
+    const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === 'ST-01');
+    g.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  await pg.waitForTimeout(250);
+  ok('marking works again once Details mode is off',
+    await pg.locator('#pop:visible').count() === 1);
+  await pg.keyboard.press('Escape');
+  await pg.evaluate(() => { const p = document.getElementById('pop'); if (p) p.style.display = 'none'; });
+  await pg.waitForTimeout(150);
+}
 
 /* ---- inline editing in the Show All list ---- */
 const row = id => pg.locator('.sarow').filter({ has: pg.locator('.sid', { hasText: new RegExp(`^${id}$`) }) }).first();
