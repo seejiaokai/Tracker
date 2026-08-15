@@ -191,7 +191,11 @@ export default function Header() {
             slides everything out from under the pointer mid-drag. */}
         <span className="saveslot">
           {dirty ? <button className="sm dirty" id="saveChanges" title="Save your work — the syllabus, and your file if one is open" onClick={core.saveChangesClick}>✓ Save changes ●</button> : null}
-          <span id="saveStat" className={'savestat ' + core.saveStat.cls}>{core.saveStat.text}</span>
+          {/* Green here while the orange button is showing would tell the user
+              their work is both safe and at risk at once — the two watch
+              different things (the store vs the file). Keep the words, drop
+              the green until nothing is outstanding. Errors stay red. */}
+          <span id="saveStat" className={'savestat ' + (dirty && core.saveStat.cls === 'ok' ? '' : core.saveStat.cls)}>{core.saveStat.text}</span>
         </span>
       </div>
     </header>

@@ -2639,10 +2639,21 @@ async function deleteEventById(rid) {
 }
 
 /* ---------- save status + backup (auto-save + manual backup button) ---------- */
-export let saveStat = { text: '● saved', cls: 'ok' };
+/* Starts blank, not "saved". A fresh load has saved nothing, and claiming it
+   spends the one indicator the user has for whether their work is safe. */
+export let saveStat = { text: '', cls: '' };
+/* A bare green "saved" used to be shown for EVERY 'ok', whatever had actually
+   happened — so switching syllabus reported "saved", and a successful syllabus
+   write reported the same words as a successful file write. Sat next to the
+   orange "Save changes" button (which watches a different flag) it told the
+   user their work was both safe and at risk in the same six pixels.
+   Now only a caller that passes no message gets the bare word; anything that
+   names what it did says so. Three callers rely on the empty form. */
 function setSaveStatus(msg, cls) {
   saveStat = {
-    text: (cls === 'ok' ? '● saved' : cls === 'saving' ? '● saving…' : cls === 'err' ? '● ' + msg : '● ' + msg),
+    text: (cls === 'saving' ? (msg ? '● ' + msg : '● saving…')
+      : cls === 'ok' ? (msg ? '● ' + msg : '● saved')
+        : '● ' + msg),
     cls: cls || ''
   };
   notify();
@@ -2967,7 +2978,13 @@ export async function saveToFileClick() {
       fileDirty = false; notify(); return;
     }
     fileHandle = await FS.pickSave(name);      /* gesture-critical */
-    if (!fileHandle) return;
+    /* Cancelling used to return in silence: the user had just been told their
+       work was unsaved, pressed Save, and been told nothing at all. Say what
+       did and did not happen — the syllabus write above this already ran. */
+    if (!fileHandle) {
+      setSaveStatus('no file chosen — nothing written to disk', 'err');
+      notify(); return;
+    }
   }
   if (!await FS.ensureWritable(fileHandle)) {
     setSaveStatus('not saved — permission to write your file was declined', 'err'); notify(); return;

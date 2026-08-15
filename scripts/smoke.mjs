@@ -464,6 +464,59 @@ ok('with both boxes ticked the suggested name warns about students',
 ok('a real save shows its size and the time on the toolbar',
   /saved \d+ KB at /.test(good.note), `note: "${good.note}"`);
 ok('a real save writes the whole file', good.bytes > 10000, `${good.bytes} bytes`);
+
+/* ---- the toolbar must not call the work safe and at risk at once ----
+   Found 15 Aug: marking an event straight after a save left a green
+   "● saved" six pixels from the orange "✓ Save changes ●". The two watch
+   different things — the store and the file — and answered the user's one
+   question in opposite ways. The words may stay; the green may not. */
+{
+  const before = await pg.evaluate(() => {
+    const el = document.getElementById('saveStat');
+    return { cls: el.className, text: el.textContent };
+  });
+  ok('a completed save does report itself in green', before.cls.includes('ok'),
+    `class="${before.cls}" text="${before.text}"`);
+  await pg.evaluate(() => window.__markFileDirtyForTests());  /* i.e. they mark an event */
+  await pg.waitForTimeout(300);                               /* let the header redraw */
+  const after = await pg.evaluate(() => {
+    const el = document.getElementById('saveStat');
+    return { cls: el.className, text: el.textContent,
+      btn: document.querySelectorAll('#saveChanges').length };
+  });
+  ok('the Save button appears once work is outstanding', after.btn === 1);
+  ok('nothing still reads green while work is outstanding', !after.cls.includes('ok'),
+    `class="${after.cls}" text="${after.text}"`);
+  ok('the status still says what it last did', after.text.trim().length > 0,
+    `text="${after.text}"`);
+}
+
+/* ---- pressing Save and cancelling the file dialog must not go silent ----
+   It used to `return` with no message at all: the user had just been told
+   their work was unsaved, pressed Save, and been told nothing back. */
+{
+  await pg.evaluate(() => {
+    window.__setFileHandleForTests(null);
+    window.__fileStoreForTests.__realPick = window.__fileStoreForTests.pickSave;
+    window.__fileStoreForTests.pickSave = async () => null;   /* the user hits Cancel */
+    window.__markFileDirtyForTests();
+  });
+  await pg.locator('#saveChanges').click();
+  await pg.waitForTimeout(400);
+  const res = await pg.evaluate(() => {
+    const FS = window.__fileStoreForTests;
+    FS.pickSave = FS.__realPick; delete FS.__realPick;
+    const el = document.getElementById('saveStat');
+    return { cls: el.className, text: el.textContent };
+  });
+  ok('cancelling the save dialog says something', res.text.trim().length > 0,
+    `text="${res.text}"`);
+  ok('cancelling the save dialog does not claim a save', !res.cls.includes('ok'),
+    `class="${res.cls}" text="${res.text}"`);
+  ok('cancelling the save dialog says nothing reached the disk',
+    /no file chosen|nothing written/i.test(res.text), `text="${res.text}"`);
+}
+
 await pg.evaluate(() => window.__setFileHandleForTests(null));
 
 /* ---- the buttons the file replaces are gone ----
