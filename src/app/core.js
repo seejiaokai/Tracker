@@ -32,8 +32,8 @@ const refreshActive = notify;
 const refreshCourses = notify;
 
 export const DEFAULT_SYLLABUS = SYLLABI[DEFAULT_SYL_NAME];
-export const TYPE_COLOR = { flight: '#19b6e8', acad: '#27d64a', test: '#ff4040', sim: '#ffe000', device: '#a64bff' };
-const DARKC = new Set(['sim', 'acad', 'na']); // labels needing dark text on light fills
+export const TYPE_COLOR = { flight: '#19b6e8', acad: '#27d64a', test: '#ff4040', sim: '#ffe000', device: '#b063ff' };
+const DARKC = new Set(['sim', 'acad', 'na', 'flight', 'test', 'device']); // labels needing dark text on light fills
 export const GRADE_FILL = { dco: '#000000', dpco: '#1f6dff', marg: '#27d64a', na: '#cdbb8e' };
 export const DONE = new Set(['dco', 'dpco', 'marg']);
 export let eventInfo = {}; export let showDetails = false;
@@ -946,7 +946,7 @@ function buildFreeLines(routes, vs) {
     const on = (selLine === L.id);
     const av = lineArrow(L);
     const mk = av === 0 ? ' marker-end="url(#arr)"' : av === 1 ? ' marker-start="url(#arr)"' : '';
-    o += '<path id="lp_' + escapeId(L.id) + '" d="' + d + '" fill="none" stroke="' + (on ? '#36c2ff' : '#39404e') + '" stroke-width="' + (on ? 2.4 : 1.3) + '"' + mk + '/>';
+    o += '<path id="lp_' + escapeId(L.id) + '" d="' + d + '" fill="none" stroke="' + (on ? '#36c2ff' : '#657085') + '" stroke-width="' + (on ? 2.4 : 1.3) + '"' + mk + '/>';
     if (arrangeMode) {
       o += '<path class="linehit" id="lh_' + escapeId(L.id) + '" data-lid="' + escapeId(L.id) + '" d="' + d + '" fill="none" stroke="transparent" stroke-width="12"/>';
       if (!L.a) o += '<circle cx="' + P[0].x.toFixed(1) + '" cy="' + P[0].y.toFixed(1) + '" r="4" fill="#ffb84d" stroke="#7a4b00" stroke-width="1"/>';
@@ -1145,7 +1145,7 @@ function buildEdges() {
     if (o.line) return; const d = edgePath(o, vs); const m = edgeMeta[o.k] || {}; const ar = (m.arrow == null) ? 0 : m.arrow;
     const mk2 = ar === 0 ? ' marker-end="url(#arr)"' : ar === 1 ? ' marker-start="url(#arr)"' : '';
     const on = (selEdge === o.k);
-    const style = on ? ' stroke="#36c2ff" stroke-width="2.4"' : ' stroke="#39404e" stroke-width="1.3"';
+    const style = on ? ' stroke="#36c2ff" stroke-width="2.4"' : ' stroke="#657085" stroke-width="1.3"';
     out += `<path d="${d}" fill="none"${style}${mk2}/>`;
     if (arrangeMode) out += `<path class="edgehit" data-p="${escapeId(o.p)}" data-c="${escapeId(o.c)}" data-k="${escapeId(o.k)}" d="${d}" fill="none" stroke="transparent" stroke-width="12"/>`;
   });

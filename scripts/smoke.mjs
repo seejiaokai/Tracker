@@ -67,6 +67,65 @@ await pg.waitForSelector('#flowSvg .ball', { timeout: 20000 });
 const nBalls = await pg.locator('#flowSvg .ball').count();
 ok('app boots and renders the flow board', nBalls > 100, `${nBalls} events`);
 
+/* ---- the chart has to be readable, measured not eyeballed ----
+   Found 15 Aug: 73 of 210 event codes were below the 4.5:1 floor — white on
+   the blue flight fill was 2.36:1 — and the prerequisite arrows were 1.82:1
+   on the page background. The flow chart IS the product: its labels and its
+   edges are what make it one, and both were the faintest things on screen.
+   Computed from the rendered page, so a later palette edit cannot quietly
+   undo it. Text needs 4.5:1; arrows are graphics, so 3:1. */
+{
+  const con = await pg.evaluate(() => {
+    /* Accepts hex or rgb(): SVG carries both, attribute strokes are hex while
+       computed fills come back as rgb(). Reading only one form is how the
+       first version of this check measured nothing and passed. */
+    const rgb = c => {
+      if (!c) return null;
+      const h = String(c).trim();
+      if (h[0] === '#') {
+        const s = h.length === 4 ? h.slice(1).split('').map(x => x + x).join('') : h.slice(1);
+        if (s.length < 6) return null;
+        return [0, 2, 4].map(i => parseInt(s.slice(i, i + 2), 16));
+      }
+      const m = h.match(/[\d.]+/g);
+      return m && m.length >= 3 ? m.slice(0, 3).map(Number) : null;
+    };
+    const lum = c => { const v = rgb(c); if (!v) return null;
+      const m = v.map(x => x / 255).map(x => x <= .03928 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4);
+      return .2126 * m[0] + .7152 * m[1] + .0722 * m[2]; };
+    const ratio = (a, b) => { const x = lum(a), y = lum(b);
+      if (x === null || y === null) return null;
+      return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+    const worst = { r: 99, id: '', on: '', ink: '' };
+    let measured = 0;
+    for (const g of document.querySelectorAll('#flowSvg .ball')) {
+      const t = g.querySelector('text'); if (!t) continue;
+      /* The type-coloured shape is the element immediately before the label —
+         innerShape() emits it there. Taking the FIRST shape in the group gets
+         the transparent hit target instead, whose fill is "none", which is how
+         this loop first measured nothing at all. */
+      const shape = t.previousElementSibling; if (!shape) continue;
+      const ink = getComputedStyle(t).fill || t.getAttribute('fill');
+      const on = shape.getAttribute('fill') || getComputedStyle(shape).fill;
+      const r = ratio(ink, on); if (r === null) continue;
+      measured++;
+      if (r < worst.r) Object.assign(worst, { r, id: g.dataset.id, on, ink });
+    }
+    const edge = document.querySelector('#flowSvg path[stroke]:not([stroke="#36c2ff"])');
+    const bg = getComputedStyle(document.body).backgroundColor;
+    return { worst, measured,
+      edge: edge ? ratio(edge.getAttribute('stroke'), bg) : null,
+      edgeStroke: edge ? edge.getAttribute('stroke') : null };
+  });
+  /* Guard against the vacuous pass: an empty loop would satisfy the floor. */
+  ok('the readability check actually reads the balls', con.measured > 100,
+    `${con.measured} labels measured`);
+  ok('every event code is readable on its own ball', con.worst.r >= 4.5,
+    `worst ${con.worst.id} ${con.worst.r.toFixed(2)}:1 — ${con.worst.ink} on ${con.worst.on}`);
+  ok('the prerequisite arrows are visible against the page',
+    con.edge !== null && con.edge >= 3, `${(con.edge || 0).toFixed(2)}:1 (${con.edgeStroke})`);
+}
+
 /* ---- hover bubble stays put while crossing a ball ---- */
 await pg.click('#detailsBtn'); await pg.waitForTimeout(250);
 const t = await pg.evaluate(() => {
