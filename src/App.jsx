@@ -99,13 +99,24 @@ export default function App() {
       </div>
       <Legend />
       <ViewTabs tab={tab} setTab={setTab} />
+      {/* Each zoom control is docked at the foot of its own column rather than
+          floating over it. Floating, the panel control landed on the Plannable
+          now card at the default 1440x900 and clipped the first chip to
+          "ACG-0"; end padding only let you scroll a card out from under it,
+          because a fixed control always covers whatever is beneath it. Docked,
+          it occupies real space and can never cover anything. The columns are
+          the grid children now, so the phone's show/hide rules target them. */}
       <div className="layout" id="layout">
-        <Board />
+        <div className="boardcol">
+          <Board />
+          <FlowZoomCtl />
+        </div>
         <Resizer />
-        <SidePanel zoom={sideZoom} />
+        <div className="sidecol">
+          <SidePanel zoom={sideZoom} />
+          <SideZoomCtl zoom={sideZoom} setZoom={setSideZoom} />
+        </div>
       </div>
-      <SideZoomCtl zoom={sideZoom} setZoom={setSideZoom} />
-      <FlowZoomCtl />
       <Pop />
       <ShowAllPanel />
       <InfoModal />

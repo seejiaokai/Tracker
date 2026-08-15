@@ -53,6 +53,11 @@ button.sm{padding:3px 7px;font-size:11px}
 /* Grid items default to min-height:auto, which lets the board's chart push the
    row taller than the viewport rather than scrolling inside it. */
 .board,.side{min-height:0}
+/* The zoom controls are docked at the foot of these columns, so each column is
+   a flex stack: the scrollable half takes the slack, the control keeps its own
+   height and never overlaps what it zooms. */
+.boardcol,.sidecol{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+.boardcol>.board,.sidecol>.side{flex:1 1 auto}
 .resizer{background:var(--line);cursor:col-resize}.resizer:hover{background:var(--accent)}
 .viewtabs{display:none;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:35}
 .viewtabs button{flex:1;padding:8px;font-size:13px}
@@ -61,8 +66,8 @@ button.sm{padding:3px 7px;font-size:11px}
  .layout{grid-template-columns:1fr}
  .resizer{display:none}
  .viewtabs{display:flex}
- body.tab-info .board{display:none}
- body.tab-flow .side{display:none}
+ body.tab-info .boardcol{display:none}
+ body.tab-flow .sidecol{display:none}
  body.tab-info .legend{display:none}
 }
 #showAllPanel{position:fixed;z-index:81;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,94vw);max-height:88vh;display:none;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.6)}
@@ -109,13 +114,8 @@ button.sm{padding:3px 7px;font-size:11px}
 .board::-webkit-scrollbar-thumb:hover{background:#5f6b7e}
 .board::-webkit-scrollbar-corner{background:#12151b}
 .board.dragging,.side.dragging{cursor:grabbing;user-select:none}
-/* padding-bottom clears the floating #sideZoomCtl (its own height plus its
-   14px inset). Without it the control lands ON the Plannable now card at the
-   default 1440x900 with no scrolling or resizing — the first chip printed as
-   "ACG-0" out of the box. Floating is deliberate, so the panel makes room
-   rather than the control moving into the flow. */
-.side{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:12px;padding-bottom:62px}
-#sideZoomCtl{position:fixed;z-index:60;right:14px;bottom:14px;display:flex;gap:4px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:4px 6px;box-shadow:0 4px 14px rgba(0,0,0,.45)}
+.side{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:12px}
+#sideZoomCtl{flex:0 0 auto;justify-content:flex-end;border-left:0;border-right:0;border-bottom:0;border-radius:0;display:flex;gap:4px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:4px 6px;box-shadow:0 4px 14px rgba(0,0,0,.45)}
 #sideZoomCtl button{padding:2px 8px;font-size:14px;line-height:1.2;min-width:26px}
 #sideZoomCtl #szReset{font-size:11px;min-width:0}
 #sideZoomCtl #szPct{font-size:11.5px;color:var(--muted);min-width:38px;text-align:center}
@@ -134,7 +134,7 @@ button.sm{padding:3px 7px;font-size:11px}
  .board{padding-bottom:170px}
  #sideZoomCtl,#flowZoomCtl{padding:3px 5px;gap:3px}
 }
-#flowZoomCtl{position:fixed;z-index:60;left:14px;bottom:14px;display:flex;gap:4px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:4px 6px;box-shadow:0 4px 14px rgba(0,0,0,.45)}
+#flowZoomCtl{flex:0 0 auto;border-left:0;border-right:0;border-bottom:0;border-radius:0;display:flex;gap:4px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:4px 6px;box-shadow:0 4px 14px rgba(0,0,0,.45)}
 #flowZoomCtl button{padding:2px 8px;font-size:14px;line-height:1.2;min-width:26px}
 #flowZoomCtl #fzReset{font-size:11px;min-width:0}
 #flowZoomCtl #fzPct{font-size:11.5px;color:var(--muted);min-width:38px;text-align:center}

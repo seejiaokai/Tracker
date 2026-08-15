@@ -1246,26 +1246,48 @@ await pg.waitForTimeout(800);
     /20 Aug 28|20 Aug 2028/.test(echo.echo), `echo "${echo.echo}"`);
 }
 
-/* ---- the panel can scroll its cards clear of the floating zoom control ----
-   Found 15 Aug: #sideZoomCtl is position:fixed bottom-right and landed on the
-   Plannable now card at the default 1440x900, printing the first chip as
-   "ACG-0". A fixed control always covers SOMETHING mid-scroll, so the fix is
-   the one the board already uses: reserve enough end padding that every card
-   can be scrolled out from under it. Docking it into the panel header would
-   remove the overlap outright and is the better fix; not taken here. */
+/* ---- the zoom controls must not cover what they zoom ----
+   Found 15 Aug: #sideZoomCtl was position:fixed bottom-right and landed on the
+   Plannable now card at the default 1440x900, clipping the first chip to
+   "ACG-0". End padding was only a workaround — a fixed control always covers
+   whatever is beneath it, so you could scroll a card clear but never stop it
+   being covered. Both controls are docked at the foot of their own column now,
+   which is why this can assert the strict thing: no overlap at all. */
 {
-  const room = await pg.evaluate(() => {
-    const side = document.querySelector('.side');
-    const ctl = document.getElementById('sideZoomCtl');
-    if (!side || !ctl || !ctl.offsetHeight) return { skip: true };
-    const c = ctl.getBoundingClientRect();
-    return { skip: false,
-      pad: Math.round(parseFloat(getComputedStyle(side).paddingBottom) || 0),
-      need: Math.round(c.height + 14) };
+  const ov = await pg.evaluate(() => {
+    const out = [];
+    for (const [id, sel, scroller] of [['sideZoomCtl', '.side .card, .side .chip, .side .kv', '.side'],
+                                       ['flowZoomCtl', '#flowSvg .ball', '.board']]) {
+      const ctl = document.getElementById(id);
+      if (!ctl || !ctl.offsetHeight) { out.push({ id, skip: true }); continue; }
+      const c = ctl.getBoundingClientRect();
+      const box = document.querySelector(scroller).getBoundingClientRect();
+      const hits = [];
+      let seen = 0;
+      for (const el of document.querySelectorAll(sel)) {
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) continue;
+        /* getBoundingClientRect reports LAYOUT position, so a card scrolled
+           below the fold still returns a rect down where the control sits even
+           though the panel clips it. Compare the visible part only, or every
+           run reports a phantom overlap. */
+        const vis = { left: Math.max(r.left, box.left), right: Math.min(r.right, box.right),
+          top: Math.max(r.top, box.top), bottom: Math.min(r.bottom, box.bottom) };
+        if (vis.right <= vis.left || vis.bottom <= vis.top) continue;
+        seen++;
+        if (vis.right > c.left && vis.left < c.right && vis.bottom > c.top && vis.top < c.bottom)
+          hits.push(el.dataset.id || (el.className || '').toString().slice(0, 18));
+      }
+      out.push({ id, skip: false, seen, hits: hits.length, first: hits[0] || '' });
+    }
+    return out;
   });
-  ok('the panel reserves room under its cards for the zoom control',
-    room.skip || room.pad >= room.need,
-    room.skip ? 'control not shown' : `${room.pad}px reserved, control needs ${room.need}px`);
+  for (const r of ov) {
+    ok(`${r.id} is on screen to be measured`, !r.skip && r.seen > 0,
+      r.skip ? 'control not shown' : `${r.seen} candidates`);
+    ok(`${r.id} covers nothing it zooms`, r.skip || r.hits === 0,
+      r.skip ? 'skipped' : `${r.hits} overlapped, first "${r.first}"`);
+  }
 }
 
 /* ---- one key dismisses every layer ----
