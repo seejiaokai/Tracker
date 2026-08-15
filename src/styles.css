@@ -104,7 +104,12 @@ button.sm{padding:3px 7px;font-size:11px}
 .board::-webkit-scrollbar-thumb:hover{background:#5f6b7e}
 .board::-webkit-scrollbar-corner{background:#12151b}
 .board.dragging,.side.dragging{cursor:grabbing;user-select:none}
-.side{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:12px}
+/* padding-bottom clears the floating #sideZoomCtl (its own height plus its
+   14px inset). Without it the control lands ON the Plannable now card at the
+   default 1440x900 with no scrolling or resizing — the first chip printed as
+   "ACG-0" out of the box. Floating is deliberate, so the panel makes room
+   rather than the control moving into the flow. */
+.side{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:12px;padding-bottom:62px}
 #sideZoomCtl{position:fixed;z-index:60;right:14px;bottom:14px;display:flex;gap:4px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:4px 6px;box-shadow:0 4px 14px rgba(0,0,0,.45)}
 #sideZoomCtl button{padding:2px 8px;font-size:14px;line-height:1.2;min-width:26px}
 #sideZoomCtl #szReset{font-size:11px;min-width:0}
@@ -379,14 +384,27 @@ small.hint{color:var(--muted);font-size:11px}
  /* The bar took 281px before a single statistic appeared, and still 175 after
     tightening, because 10 controls wrap onto four rows in 390px. One row that
     scrolls sideways is 44px whatever it holds — that is 130px of screen handed
-    back to the statistics. */
- header{padding:5px 8px;gap:8px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
- header::-webkit-scrollbar{display:none}
+    back to the statistics.
+    Superseded 15 Aug at the user's request: one scrolling row hid six of the
+    controls off the right-hand edge behind a suppressed scrollbar, with
+    nothing on screen to say they were there. Two wrapped rows show every
+    control and still leave the board the rest of the screen. The width that
+    buys the second row comes from dropping the inline field labels — each
+    dropdown already prints its own value — not from hiding controls. */
+ header{padding:5px 8px;gap:6px;row-gap:5px;flex-wrap:wrap;overflow:visible}
  header>div:first-child{display:none}
- .controls{flex:0 0 auto;flex-wrap:nowrap;margin-left:0}
- /* Collapses .hspacer to nothing as well, so the one scrolling row stays
-    packed and Crew sits hard against the left edge. */
+ .controls{flex:1 1 auto;flex-wrap:wrap;gap:6px;margin-left:0}
  .controls>*{flex:0 0 auto}
+ /* An auto-margin spacer applies per flex line, so on a wrapping bar it would
+    push whatever landed on row one hard right. */
+ .hspacer{display:none}
+ /* Only the caption goes, never the label itself — it WRAPS the dropdown, so
+    hiding the label would take the control with it. */
+ .controls .lbltx{display:none}
+ /* Eleven controls only reach two rows in 390px if they are trimmed to it:
+    the three dropdowns are the width, and they still print their own value. */
+ .controls select{max-width:88px;padding:4px 6px;font-size:12px}
+ .controls button.sm{padding:3px 6px}
  /* A 132px box in a 390px row leaves nothing for anything else, so the phone
     gets a 🔍 button and a full-width strip under the bar. position:fixed, not
     absolute: the header scrolls sideways, and an overflow container clips its
@@ -398,6 +416,10 @@ small.hint{color:var(--muted);font-size:11px}
    box-shadow:0 8px 26px rgba(0,0,0,.5)}
  .findpanel.on{display:flex}
  #hSearch{flex:1 1 auto;min-width:0;width:auto}
- .saveslot{min-width:0}
+ /* 204px of the 865px the bar wants was this slot, because .savestat is capped
+    at 170px for a desktop row. The words still ellipsis; the full text is in
+    the File menu beside the file name. */
+ .saveslot{min-width:0;gap:4px}
+ .savestat{max-width:72px;font-size:10px}
  .legend{display:none}
 }

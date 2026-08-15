@@ -123,7 +123,7 @@ export default function Header() {
             separate phone rule. It stays INSIDE .controls because the header
             checks scope to "header .controls" and a sibling would silently
             drop out of them. */}
-        <label className="sub">Crew{' '}
+        <label className="sub"><span className="lbltx">Crew</span>{' '}
           <select id="activeSel" value={core.active || ''} onChange={e => core.setActive(e.target.value)}>
             {core.roster.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
@@ -135,7 +135,7 @@ export default function Header() {
         </Menu>
         <HeaderSearch />
 
-        <label className="sub">Course{' '}
+        <label className="sub"><span className="lbltx">Course</span>{' '}
           <select id="courseSel" value={core.course || ''} onChange={e => core.switchCourse(e.target.value)}>
             {core.COURSES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -148,7 +148,7 @@ export default function Header() {
           <button className="sm" id="delCourse" title="Delete the current course" onClick={core.delCourse}>🗑 Delete course</button>
         </Menu>
 
-        <label className="sub">Syllabus{' '}
+        <label className="sub"><span className="lbltx">Syllabus</span>{' '}
           <select id="sylSel" value={sylValue} onChange={e => core.switchSyllabus(e.target.value)}>
             {sylOptions.map(n => <option key={n} value={n}>{n + (core.CUSTOMS[n] ? ' ✎' : '')}</option>)}
           </select>

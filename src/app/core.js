@@ -2533,6 +2533,15 @@ export function handleEscapeKey(e) {
   /* Escape abandons a half-picked lull period rather than saving one end of it. */
   if (lullCopy) { e.preventDefault(); closeLullCopy(); return; }
   if (lullPick) { e.preventDefault(); closeLullPicker(); return; }
+  /* Escape used to close the lull calendar and nothing else, so the grading
+     pop-up, Show All and Save a copy each needed their own dismiss found by
+     eye — four different contracts for one gesture. Innermost first, matching
+     what sits on top: Save a copy, then the grading pop-up, then Show All.
+     Show All's own handler only fires while focus is inside the panel, which
+     it usually is not. */
+  if (copyOpen) { e.preventDefault(); closeCopy(); return; }
+  if (pop) { e.preventDefault(); closePop(); return; }
+  if (showAllOpen) { e.preventDefault(); closeShowAll(); return; }
   if (!arrangeMode || tool !== 'line' || !drawing) return;
   e.preventDefault(); finishLine(drawing.pts.length >= 2);
 }

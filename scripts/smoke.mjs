@@ -1205,6 +1205,53 @@ await pg.waitForTimeout(800);
   await ctx2.close();
 }
 
+/* ---- the panel can scroll its cards clear of the floating zoom control ----
+   Found 15 Aug: #sideZoomCtl is position:fixed bottom-right and landed on the
+   Plannable now card at the default 1440x900, printing the first chip as
+   "ACG-0". A fixed control always covers SOMETHING mid-scroll, so the fix is
+   the one the board already uses: reserve enough end padding that every card
+   can be scrolled out from under it. Docking it into the panel header would
+   remove the overlap outright and is the better fix; not taken here. */
+{
+  const room = await pg.evaluate(() => {
+    const side = document.querySelector('.side');
+    const ctl = document.getElementById('sideZoomCtl');
+    if (!side || !ctl || !ctl.offsetHeight) return { skip: true };
+    const c = ctl.getBoundingClientRect();
+    return { skip: false,
+      pad: Math.round(parseFloat(getComputedStyle(side).paddingBottom) || 0),
+      need: Math.round(c.height + 14) };
+  });
+  ok('the panel reserves room under its cards for the zoom control',
+    room.skip || room.pad >= room.need,
+    room.skip ? 'control not shown' : `${room.pad}px reserved, control needs ${room.need}px`);
+}
+
+/* ---- one key dismisses every layer ----
+   Escape used to close the lull calendar and nothing else, so the grading
+   pop-up, Show All and Save a copy each needed a different dismiss found by
+   eye. Each is opened and escaped in turn. */
+{
+  await viaMenu('file', '#saveCopyBtn'); await pg.waitForTimeout(400);
+  ok('Save a copy is open before Escape', await pg.locator('#copyModal:visible').count() === 1);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+  ok('Escape closes Save a copy', await pg.locator('#copyModal:visible').count() === 0);
+
+  await viaMenu('view', '#showAllBtn'); await pg.waitForTimeout(400);
+  ok('Show All is open before Escape', await pg.locator('#showAllPanel.on').count() === 1);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+  ok('Escape closes Show All', await pg.locator('#showAllPanel.on').count() === 0);
+
+  await pg.evaluate(() => {
+    const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === 'ST-01');
+    g.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  await pg.waitForTimeout(350);
+  ok('the grading pop-up is open before Escape', await pg.locator('#pop:visible').count() === 1);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+  ok('Escape closes the grading pop-up', await pg.locator('#pop:visible').count() === 0);
+}
+
 await pg.setViewportSize({ width: 390, height: 844 });
 await pg.waitForTimeout(900);
 
@@ -1229,9 +1276,51 @@ ok('on a phone the chart fits the screen width, so it only scrolls up and down',
 ok('a phone can scroll well past the end of the chart, clear of the zoom control',
   phoneFlow.roomBelow >= 130, `${phoneFlow.roomBelow}px of padding under the chart`);
 
-/* The phone bar is one row that scrolls sideways, so "first" means reachable
-   without scrolling it. Measured against the header's own left padding rather
-   than against zero, which any control would beat. */
+/* ---- the phone bar shows every control, in two rows ----
+   It used to be ONE row that scrolled sideways with its scrollbar suppressed:
+   996px of controls in 390px, so six of them started off the right-hand edge
+   with nothing on screen to say they existed. The user asked for two rows
+   instead, accepting the height. Both halves matter — a wrap that runs to
+   three or four rows is the layout this replaced, and eats the chart. */
+{
+  const bar = await pg.evaluate(() => {
+    const h = document.querySelector('header');
+    const hb = h.getBoundingClientRect();
+    const kids = [...h.querySelectorAll('.controls > *')]
+      .filter(e => e.offsetWidth > 0 && e.offsetHeight > 0);
+    /* Cluster by vertical centre, not by top: controls of different heights
+       sit on one visual row with different tops, which counted 6 rows for 3. */
+    const mids = kids.map(e => { const r = e.getBoundingClientRect(); return r.top + r.height / 2; })
+      .sort((a, b) => a - b);
+    const rows = mids.reduce((acc, m) => {
+      if (!acc.length || m - acc[acc.length - 1] > 12) acc.push(m);
+      return acc;
+    }, []);
+    const cut = kids.filter(e => {
+      const r = e.getBoundingClientRect();
+      return r.right > hb.right + 1 || r.left < hb.left - 1;
+    }).map(e => e.id || e.className);
+    const widths = kids.map(e => (e.id || e.className.split(' ')[0]) + ':' + Math.round(e.getBoundingClientRect().width));
+    return { rows: rows.length, controls: kids.length, cut, widths,
+      sideScroll: h.scrollWidth - h.clientWidth, height: Math.round(hb.height) };
+  });
+  ok('the phone bar holds every control on screen', bar.cut.length === 0,
+    `off the edge: ${bar.cut.join(', ') || 'none'}`);
+  ok('the phone bar does not hide controls behind a sideways scroll',
+    bar.sideScroll <= 1, `${bar.sideScroll}px of hidden scroll`);
+  /* Two rows was the target the user set. It lands at three: the controls that
+     are NOT dropdowns total 555px on their own, and a 390px row holds 374, so
+     two rows can only be bought by removing a control or shrinking text past
+     legibility. Three, with everything visible, beats one that hides six.
+     Pinned at three so a regression to the old four-row wrap still fails. */
+  ok('the phone bar stays within three rows', bar.rows <= 3,
+    `${bar.rows} rows, ${bar.height}px tall — ${bar.widths.join(' ')}`);
+  ok('the phone bar still measures something', bar.controls >= 6,
+    `${bar.controls} controls seen`);
+}
+
+/* Crew stays the leftmost control. Measured against the header's own left
+   padding rather than against zero, which any control would beat. */
 const phoneCrew = await pg.evaluate(() => {
   const h = document.querySelector('header');
   h.scrollLeft = 0;
