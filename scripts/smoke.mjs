@@ -1242,8 +1242,27 @@ await pg.waitForTimeout(800);
     const f = el.closest('.field');
     return { echo: (f.querySelector('.decho') || {}).textContent || '' };
   });
-  ok('a date box shows the date the app understood, unambiguously',
-    /20 Aug 28|20 Aug 2028/.test(echo.echo), `echo "${echo.echo}"`);
+  /* 2028-08-20 is deliberately a date whose day and month CANNOT be swapped
+     unnoticed: 20 is not a valid month, so 20/08/28 proves day-first and
+     08/20/28 would fail outright. The month-name form was replaced by the
+     user's choice on 16 Aug. */
+  /* The user chose numeric everywhere, not just under Last Flown, so nothing
+     the app writes may still spell a month. The native date BOX is excluded on
+     purpose: it is drawn by the device and its text is not in the DOM, so it
+     cannot appear here and the app cannot control it anyway. */
+  const spelled = await pg.evaluate(() => {
+    const txt = document.querySelector('.side').innerText || '';
+    const m = txt.match(/\b\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/g) || [];
+    const numeric = txt.match(/\b\d{2}\/\d{2}\/\d{2}\b/g) || [];
+    return { spelled: [...new Set(m)], numeric: numeric.length };
+  });
+  ok('at least one date is on screen to be judged', spelled.numeric > 0,
+    `${spelled.numeric} numeric dates found`);
+  ok('no date in the panel still spells the month', spelled.spelled.length === 0,
+    spelled.spelled.join(', '));
+
+  ok('a date box shows the date the app understood, day first',
+    /^\s*20\/08\/28\s*$/.test(echo.echo), `echo "${echo.echo}"`);
 }
 
 /* ---- the zoom controls must not cover what they zoom ----

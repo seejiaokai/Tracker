@@ -1837,7 +1837,14 @@ export function stats(s) {
 /* date utils */
 export const DAY = 864e5;
 export function parseD(s) { if (!s) return null; const mm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s); const d = mm ? new Date(+mm[1], +mm[2] - 1, +mm[3]) : new Date(s); return isNaN(d) ? null : d; }
-export function fmt(d) { if (!d) return '—'; return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }); }
+/* Every date the app writes goes through here, so this one line sets the style
+   everywhere — the line under Last Flown, the lull chips, the projected end and
+   the end dates. Numeric day-first at the user's choice, 16 Aug: 16/08/26.
+   en-GB is the locale that gives dd/mm/yy; the browser's own setting must NOT
+   be used here, or the same file reads differently on different machines. The
+   native date BOX is a separate matter — it is drawn by the device and the page
+   cannot set its format at all, which is why it may still spell the month. */
+export function fmt(d) { if (!d) return '—'; return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }); }
 export function daysBetween(a, b) { return Math.floor((b - a) / DAY); }
 function overlapDays(s, e, a, b) { const lo = Math.max(s, a), hi = Math.min(e, b); return Math.max(0, (hi - lo) / DAY); }
 export function lullDaysIn(s, a, b) { return ((lulls && lulls[s]) || []).reduce((t, l) => { const s = parseD(l.start), e = parseD(l.end); if (!s || !e) return t; return t + overlapDays(s.getTime(), e.getTime() + DAY, a, b); }, 0); }
