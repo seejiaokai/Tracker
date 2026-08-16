@@ -92,17 +92,11 @@ function LullCopy() {
   );
 }
 
-/* The native date box takes its display format from the browser's locale, so
-   it renders mm/dd/yyyy here while every date the app PRINTS is "20 Aug 28".
-   For two fields feeding currency arithmetic, 03/04 is a real ambiguity. The
-   format cannot be set from CSS or markup, so the app echoes back what it
-   understood instead of pretending to control the box. */
-function DateEcho({ v }) {
-  if (!v) return null;
-  const d = new Date(v + 'T00:00:00');
-  if (isNaN(d)) return null;
-  return <div className="decho">{core.fmt(d)}</div>;
-}
+/* No echo line under the date boxes. One was added on 15 Aug to spell out which
+   number was the month, then removed on 16 Aug at the user's request: their
+   phone already writes "Aug 16, 2026" in the box, so the line repeated it, and
+   every date the app writes is now numeric day-first anyway. The box's own
+   format still belongs to the device and cannot be set from here. */
 
 export default function SidePanel({ zoom }) {
   const ref = useRef(null);
@@ -223,8 +217,8 @@ export default function SidePanel({ zoom }) {
       <div className="card wide c-curr">
         <h3>Currency &amp; flex</h3>
         <div className="curGrid">
-          <div className="field"><label>Last Flown (Syllabus)</label><input type="date" id="lastSyll" value={core.dates[s].lastSyll || ''} onChange={e => core.setLastSyll(s, e.target.value)} /><DateEcho v={core.dates[s].lastSyll} /></div>
-          <div className="field"><label>Last Flown (Currency)</label><input type="date" id="lastCurr" value={core.dates[s].lastCurr || ''} onChange={e => core.setLastCurr(s, e.target.value)} /><DateEcho v={core.dates[s].lastCurr} /></div>
+          <div className="field"><label>Last Flown (Syllabus)</label><input type="date" id="lastSyll" value={core.dates[s].lastSyll || ''} onChange={e => core.setLastSyll(s, e.target.value)} /></div>
+          <div className="field"><label>Last Flown (Currency)</label><input type="date" id="lastCurr" value={core.dates[s].lastCurr || ''} onChange={e => core.setLastCurr(s, e.target.value)} /></div>
           <div className="field"><label>No. of Down Days</label><input type="number" min="0" id="downDays" value={core.dates[s].downDays || ''} style={{ width: 80 }} onChange={e => core.setDownDays(s, e.target.value)} /></div>
           <div className="field"><label>Upchit Date</label><input type="date" id="upchit" value={core.dates[s].upchit || ''} onChange={e => core.setUpchit(s, e.target.value)} /></div>
         </div>
