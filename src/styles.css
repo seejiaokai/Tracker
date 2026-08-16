@@ -95,7 +95,6 @@ button.sm{padding:3px 7px;font-size:11px}
 .failtot{margin-left:auto;background:#ff2b2b1f;border:1px solid #ff2b2b88;color:#ff9b9b;border-radius:20px;padding:1px 8px;font-size:10.5px;font-weight:600;letter-spacing:0}
 .failchips{max-height:104px;overflow:auto;align-content:flex-start}
 .failchip{border:1px solid #ff2b2b88;color:#ff9b9b;background:transparent;white-space:nowrap}
-.decho{font-size:10.5px;color:var(--muted);margin-top:2px;letter-spacing:.2px}
 /* Status badge: dark ink on the grade's own fill, matching the ring colours on
    the board so one vocabulary covers both surfaces. */
 .sst{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:20px;font-size:10.5px;font-weight:600;vertical-align:1px}

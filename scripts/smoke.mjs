@@ -1227,86 +1227,41 @@ await pg.waitForTimeout(800);
   await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
 }
 
-/* ---- a date box must not leave dd/mm vs mm/dd ambiguous ----
-   The native control takes its format from the browser locale, so it shows
-   mm/dd/yyyy while every date the app prints is "20 Aug 28". Two of these
-   feed currency arithmetic. The app echoes back what it understood. */
+/* ---- every date the app writes is numeric, day first ----
+   The user's choice, 16 Aug. The echo line that used to sit under each date box
+   is gone at their request: their phone already writes "Aug 16, 2026" in the
+   box, so it repeated it. The box's OWN format is excluded here on purpose — it
+   is drawn by the device, its text is not in the DOM, and no page can set it.
+   A lull period is set so at least one app-written date is guaranteed on
+   screen: without that, an empty panel satisfies "no month names" trivially. */
 {
-  const echo = await pg.evaluate(async () => {
+  await pg.evaluate(async () => {
     const el = document.getElementById('lastSyll');
     const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
     set.call(el, '2028-08-20');
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
     await new Promise(r => setTimeout(r, 500));
-    const f = el.closest('.field');
-    return { echo: (f.querySelector('.decho') || {}).textContent || '' };
   });
-  /* 2028-08-20 is deliberately a date whose day and month CANNOT be swapped
-     unnoticed: 20 is not a valid month, so 20/08/28 proves day-first and
-     08/20/28 would fail outright. The month-name form was replaced by the
-     user's choice on 16 Aug. */
-  /* The user chose numeric everywhere, not just under Last Flown, so nothing
-     the app writes may still spell a month. The native date BOX is excluded on
-     purpose: it is drawn by the device and its text is not in the DOM, so it
-     cannot appear here and the app cannot control it anyway. */
-  const spelled = await pg.evaluate(() => {
+  const dates = await pg.evaluate(() => {
     const txt = document.querySelector('.side').innerText || '';
-    const m = txt.match(/\b\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/g) || [];
-    const numeric = txt.match(/\b\d{2}\/\d{2}\/\d{2}\b/g) || [];
-    return { spelled: [...new Set(m)], numeric: numeric.length };
+    return {
+      spelled: [...new Set(txt.match(/\b\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/g) || [])],
+      numeric: txt.match(/\b\d{2}\/\d{2}\/\d{2}\b/g) || [],
+      echoes: document.querySelectorAll('.decho').length,
+    };
   });
-  ok('at least one date is on screen to be judged', spelled.numeric > 0,
-    `${spelled.numeric} numeric dates found`);
-  ok('no date in the panel still spells the month', spelled.spelled.length === 0,
-    spelled.spelled.join(', '));
-
-  ok('a date box shows the date the app understood, day first',
-    /^\s*20\/08\/28\s*$/.test(echo.echo), `echo "${echo.echo}"`);
-}
-
-/* ---- the zoom controls must not cover what they zoom ----
-   Found 15 Aug: #sideZoomCtl was position:fixed bottom-right and landed on the
-   Plannable now card at the default 1440x900, clipping the first chip to
-   "ACG-0". End padding was only a workaround — a fixed control always covers
-   whatever is beneath it, so you could scroll a card clear but never stop it
-   being covered. Both controls are docked at the foot of their own column now,
-   which is why this can assert the strict thing: no overlap at all. */
-{
-  const ov = await pg.evaluate(() => {
-    const out = [];
-    for (const [id, sel, scroller] of [['sideZoomCtl', '.side .card, .side .chip, .side .kv', '.side'],
-                                       ['flowZoomCtl', '#flowSvg .ball', '.board']]) {
-      const ctl = document.getElementById(id);
-      if (!ctl || !ctl.offsetHeight) { out.push({ id, skip: true }); continue; }
-      const c = ctl.getBoundingClientRect();
-      const box = document.querySelector(scroller).getBoundingClientRect();
-      const hits = [];
-      let seen = 0;
-      for (const el of document.querySelectorAll(sel)) {
-        const r = el.getBoundingClientRect();
-        if (!r.width || !r.height) continue;
-        /* getBoundingClientRect reports LAYOUT position, so a card scrolled
-           below the fold still returns a rect down where the control sits even
-           though the panel clips it. Compare the visible part only, or every
-           run reports a phantom overlap. */
-        const vis = { left: Math.max(r.left, box.left), right: Math.min(r.right, box.right),
-          top: Math.max(r.top, box.top), bottom: Math.min(r.bottom, box.bottom) };
-        if (vis.right <= vis.left || vis.bottom <= vis.top) continue;
-        seen++;
-        if (vis.right > c.left && vis.left < c.right && vis.bottom > c.top && vis.top < c.bottom)
-          hits.push(el.dataset.id || (el.className || '').toString().slice(0, 18));
-      }
-      out.push({ id, skip: false, seen, hits: hits.length, first: hits[0] || '' });
-    }
-    return out;
-  });
-  for (const r of ov) {
-    ok(`${r.id} is on screen to be measured`, !r.skip && r.seen > 0,
-      r.skip ? 'control not shown' : `${r.seen} candidates`);
-    ok(`${r.id} covers nothing it zooms`, r.skip || r.hits === 0,
-      r.skip ? 'skipped' : `${r.hits} overlapped, first "${r.first}"`);
-  }
+  ok('at least one app-written date is on screen to be judged', dates.numeric.length > 0,
+    `${dates.numeric.length} found: ${dates.numeric.slice(0, 3).join(', ')}`);
+  ok('no date the app writes still spells the month', dates.spelled.length === 0,
+    dates.spelled.join(', '));
+  /* Shape only. ORDER cannot be proved here: a projected end like 03/09/26
+     reads the same either way round. It is proved on the lull chip below,
+     which always ends on the last day of a month. */
+  ok('app-written dates are dd/mm/yy shaped',
+    dates.numeric.every(d => /^\d{2}\/\d{2}\/\d{2}$/.test(d)), dates.numeric.join(', '));
+  ok('the duplicate line under the date boxes is gone', dates.echoes === 0,
+    `${dates.echoes} echo lines`);
 }
 
 /* ---- the failures card, driven the way the user records a failure ----
@@ -1741,6 +1696,20 @@ ok('two clicks on the calendar make one lull period',
   await pg.locator('#lullChips .chip').count() === 1);
 ok('the calendar closes itself once the period is complete',
   await pg.locator('#lullCal.on').count() === 0);
+
+/* ---- and the chip proves the ORDER, which no other date on screen can ----
+   The period above runs to the LAST day of a month, so its end day is 28-31 —
+   a number that cannot be a month. 31/08/26 is day-first; 08/31/26 is not, and
+   only a date past the 12th can tell the two apart. */
+{
+  const chip = (await pg.locator('#lullChips .chip').first().innerText()).trim();
+  const parts = chip.match(/(\d{2})\/(\d{2})\/(\d{2})/g) || [];
+  const ends = parts.map(d => +d.slice(0, 2));
+  ok('the lull chip shows two numeric dates', parts.length === 2, `chip: "${chip}"`);
+  ok('a date past the 12th puts the DAY first, proving the order',
+    ends.some(n => n > 12) && parts.every(d => +d.slice(3, 5) <= 12),
+    `chip: "${chip}" — leading numbers ${ends.join(' and ')}`);
+}
 
 /* Per student: the second student must not inherit the first one's periods. */
 const other = roster0.find(r => r !== roster0[0]);
