@@ -1290,6 +1290,65 @@ await pg.waitForTimeout(800);
   }
 }
 
+/* ---- the failures card, driven the way the user records a failure ----
+   The user's notation, 16 Aug: the FIRST failure shows the plain code and each
+   further one adds an X, so the X count is one less than the number of
+   failures. The total counts failures, not events. Worst first. Driven through
+   the pop-up's own +/- buttons rather than by writing marks, so the wiring from
+   recording a failure to the card is what gets proved. */
+{
+  const bump = async (id, n) => {
+    await pg.evaluate(i => {
+      const g = [...document.querySelectorAll('#flowSvg .ball')].find(x => x.dataset.id === i);
+      g.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    }, id);
+    await pg.waitForSelector('#popFailPlus', { timeout: 4000 });
+    for (let k = 0; k < Math.abs(n); k++) {
+      await pg.click(n > 0 ? '#popFailPlus' : '#popFailMinus');
+      await pg.waitForTimeout(120);
+    }
+    await pg.keyboard.press('Escape'); await pg.waitForTimeout(250);
+  };
+
+  await bump('ST-01', 3);
+  await bump('ST-02', 1);
+  const card = await pg.evaluate(() => ({
+    chips: [...document.querySelectorAll('#failChips .failchip')].map(c => c.textContent.trim()),
+    total: (document.getElementById('failTotal') || {}).textContent || '',
+  }));
+  ok('a failed event carries one X per failure after the first',
+    card.chips[0] === 'ST-01XX', `chips: ${card.chips.join(', ')}`);
+  ok('a single failure shows the plain code',
+    card.chips.includes('ST-02'), `chips: ${card.chips.join(', ')}`);
+  ok('the worst offender is listed first',
+    card.chips.indexOf('ST-01XX') === 0, card.chips.join(', '));
+  ok('the total counts failures, not events',
+    /\b4 fails\b/.test(card.total), `total: "${card.total}"`);
+
+  /* Unbounded by nature, so the list must never grow the panel without limit. */
+  const capped = await pg.evaluate(() => {
+    const el = document.getElementById('failChips');
+    const max = parseFloat(getComputedStyle(el).maxHeight);
+    return { max, h: Math.round(el.getBoundingClientRect().height), scrolls: getComputedStyle(el).overflowY };
+  });
+  ok('the failures list has a ceiling and scrolls inside it',
+    capped.max > 0 && capped.max < 200 && /auto|scroll/.test(capped.scrolls),
+    `max-height ${capped.max}px, overflow-y ${capped.scrolls}`);
+
+  /* Put it back, or every later check inherits four failures. */
+  await bump('ST-01', -3);
+  await bump('ST-02', -1);
+  const cleared = await pg.evaluate(() => ({
+    chips: document.querySelectorAll('#failChips .failchip').length,
+    total: !!document.getElementById('failTotal'),
+    empty: (document.getElementById('failChips') || {}).textContent || '',
+  }));
+  ok('removing the failures empties the card again',
+    cleared.chips === 0 && !cleared.total, `${cleared.chips} chips left`);
+  ok('an unfailed student sees "none", not a blank card',
+    /none/i.test(cleared.empty), `"${cleared.empty.trim()}"`);
+}
+
 /* ---- one key dismisses every layer ----
    Escape used to close the lull calendar and nothing else, so the grading
    pop-up, Show All and Save a copy each needed a different dismiss found by
@@ -1477,9 +1536,17 @@ const zoomOverlap = await pg.evaluate(() => {
   if (!z) return { none: true };
   const r = z.getBoundingClientRect();
   if (!r.width) return { none: true };
+  /* Clip to the panel's visible box first. getBoundingClientRect returns LAYOUT
+     position, so once the panel scrolls, a card below the fold reports a rect
+     down where the docked bar sits even though the panel hides it — a phantom
+     overlap that appears the moment any card is added. */
+  const box = document.querySelector('.side').getBoundingClientRect();
   const hit = [...document.querySelectorAll('#side .card')].filter(c => {
     const b = c.getBoundingClientRect();
-    return r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top;
+    const v = { l: Math.max(b.left, box.left), r: Math.min(b.right, box.right),
+      t: Math.max(b.top, box.top), b2: Math.min(b.bottom, box.bottom) };
+    if (v.r <= v.l || v.b2 <= v.t) return false;
+    return r.left < v.r && r.right > v.l && r.top < v.b2 && r.bottom > v.t;
   }).map(c => ((c.querySelector('h3') || {}).textContent || '').trim().slice(0, 18));
   return { hit, z: [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)] };
 });
@@ -1584,14 +1651,26 @@ ok('no end-date box runs past its own box or its card',
 ok('the info panel opens at 100% on its new baseline',
   (await pg.textContent('#szPct')).trim() === '100%', await pg.textContent('#szPct'));
 
-/* Lull periods last, as asked — anything else stranded down there is a mistake. */
-ok('lull periods is the card that sits below the rest', await pg.evaluate(() => {
-  const s = document.getElementById('side');
-  const cards = [...s.querySelectorAll('.card')];
-  const lowest = cards.reduce((a, c) =>
-    c.getBoundingClientRect().bottom > a.getBoundingClientRect().bottom ? c : a);
-  return ((lowest.querySelector('h3') || {}).textContent || '').trim().startsWith('Lull');
-}));
+/* Lull periods was alone on the last row at the user's request; Failures now
+   takes the empty slot beside it (approved 16 Aug), so the last row is those
+   two and nothing else. Anything else stranded down there is a mistake, and a
+   card added without an `order` lands at order:0 and jumps to the FRONT — which
+   is exactly what happened when Failures was first added, unpairing Students
+   from Overall three rows above. */
+{
+  const bottom = await pg.evaluate(() => {
+    const cards = [...document.getElementById('side').querySelectorAll('.card')];
+    const low = cards.reduce((a, c) =>
+      c.getBoundingClientRect().bottom > a.getBoundingClientRect().bottom ? c : a);
+    const edge = low.getBoundingClientRect().bottom;
+    return cards
+      .filter(c => Math.abs(c.getBoundingClientRect().bottom - edge) < 12)
+      .map(c => ((c.querySelector('h3') || {}).textContent || '').trim().split(' ')[0]);
+  });
+  ok('the last row is Lull periods and Failures, paired',
+    bottom.length === 2 && bottom.includes('Lull') && bottom.includes('Failures'),
+    bottom.join(' + '));
+}
 
 await pg.setViewportSize({ width: 1500, height: 950 });
 await pg.waitForTimeout(400);

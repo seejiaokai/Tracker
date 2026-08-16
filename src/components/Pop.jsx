@@ -35,9 +35,9 @@ export default function Pop() {
       </div>
       <div className="fails">
         <span className="mini">Fails:</span>
-        <button className="sm" onClick={() => core.popFail(-1)}>−</button>
+        <button className="sm" id="popFailMinus" title="One fewer failure" onClick={() => core.popFail(-1)}>−</button>
         <span id="failCount" style={{ minWidth: 14, textAlign: 'center' }}>{core.failOf(s, p.id)}</span>
-        <button className="sm" onClick={() => core.popFail(1)}>+</button>
+        <button className="sm" id="popFailPlus" title="Record another failure" onClick={() => core.popFail(1)}>+</button>
       </div>
       {isFlight && (
         <div id="popFlightRow" style={{ display: 'block', marginTop: 8, borderTop: '1px dashed #262c38', paddingTop: 8 }}>

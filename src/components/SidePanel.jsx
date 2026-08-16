@@ -268,6 +268,39 @@ export default function SidePanel({ zoom }) {
         </div>
         <div className="mini" style={{ marginTop: 6 }}>Baseline 2 events/wk. Both end-date paces exclude this student’s lull periods.</div>
       </div>
+      {/* Failures are UNBOUNDED — an event can fail any number of times — so this
+          card takes a fixed height and scrolls inside itself. Anything that grows
+          without a ceiling here would push pace and currency off a phone screen.
+          It goes full width past ten entries, dropping Lull to its own row: Lull
+          is the least-consulted card on this panel and already the shortest.
+          Notation is the user's, 16 Aug: the first failure shows the plain code
+          and every further one adds an X, so the X count is one less than the
+          number of failures. The total counts failures, not events. */}
+      {(() => {
+        const fails = core.SYL
+          .map(e => ({ id: e.id, n: core.failOf(s, e.id) }))
+          .filter(x => x.n > 0)
+          .sort((a, b) => b.n - a.n || a.id.localeCompare(b.id));
+        const total = fails.reduce((t, x) => t + x.n, 0);
+        return (
+          <div className={'card c-fails' + (fails.length > 10 ? ' wide' : '')} id="failsCard">
+            <h3>Failures <span className="who">— {s}</span>
+              {total ? <span className="failtot" id="failTotal">
+                {total} fail{total === 1 ? '' : 's'}</span> : null}</h3>
+            <div className="chips failchips" id="failChips">
+              {fails.length
+                ? fails.map(x => (
+                  <span key={x.id} className="chip failchip" data-fails={x.n}
+                    title={`${x.id} — failed ${x.n} time${x.n === 1 ? '' : 's'}`}>
+                    {x.id + 'X'.repeat(x.n - 1)}
+                  </span>
+                ))
+                : <span className="mini">none</span>}
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="card c-lull">
         <h3>Lull periods <span className="who">— {s}</span></h3>
         <div className="chips" id="lullChips">

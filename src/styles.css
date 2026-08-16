@@ -87,6 +87,14 @@ button.sm{padding:3px 7px;font-size:11px}
 .ordrow button{padding:2px 7px;font-size:12px}
 .sarow .sdot{width:11px;height:11px;border-radius:50%;margin-top:3px}
 .sarow .sid{font-weight:700}.sarow .snm{color:var(--ink)}
+/* Failures. Outlined, never solid: --red (danger) and --test (an event type) are
+   near-identical, and a solid red chip beside a red Test ball would read as the
+   same thing meaning two different things. The list has a ceiling and scrolls
+   inside it, because the number of failures has no ceiling. */
+.c-fails h3{display:flex;align-items:center;gap:6px}
+.failtot{margin-left:auto;background:#ff2b2b1f;border:1px solid #ff2b2b88;color:#ff9b9b;border-radius:20px;padding:1px 8px;font-size:10.5px;font-weight:600;letter-spacing:0}
+.failchips{max-height:104px;overflow:auto;align-content:flex-start}
+.failchip{border:1px solid #ff2b2b88;color:#ff9b9b;background:transparent;white-space:nowrap}
 .decho{font-size:10.5px;color:var(--muted);margin-top:2px;letter-spacing:.2px}
 /* Status badge: dark ink on the grade's own fill, matching the ring colours on
    the board so one vocabulary covers both surfaces. */
@@ -299,11 +307,13 @@ small.hint{color:var(--muted);font-size:11px}
     width, where their fields go two across instead of stacking four deep. A
     183px column is too narrow for a dd/mm/yyyy field to sit beside anything. */
  .card.wide{grid-column:1/-1}
- /* Five narrow cards means one always sits alone on the last row. Lull periods
-    goes there at the user's request — it is the one card they are happy to
-    scroll for — and Plannable now takes its place beside Next event. */
+ /* Explicit order, so a new card cannot silently land first: a card without one
+    defaults to order:0 and jumps ahead of Overall, which is what unpaired
+    Students from Overall the moment Failures was added.
+    Lull used to sit alone on the last row at the user's request; Failures takes
+    the empty slot beside it (16 Aug), which is the free space this panel had. */
  .c-overall{order:1}.c-students{order:2}.c-next{order:3}.c-plan{order:4}
- .c-curr{order:5}.c-pace{order:6}.c-lull{order:7}
+ .c-curr{order:5}.c-pace{order:6}.c-lull{order:7}.c-fails{order:8}
  .kvGrid,.curKv{grid-template-columns:minmax(0,1fr)}
  .kvGrid .kv,.curKv .kv{border-bottom:0}
  .flexPair{display:grid;gap:5px;margin-top:6px}
